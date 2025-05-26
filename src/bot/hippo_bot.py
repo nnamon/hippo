@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -74,9 +74,31 @@ class HippoBot:
             name="start_user_reminders"
         )
         
+        # Set bot commands (schedule for after startup)
+        self.job_queue.run_once(
+            self._set_bot_commands_delayed,
+            when=2,  # Set commands after 2 seconds
+            name="set_bot_commands"
+        )
+        
     async def _start_user_reminders_delayed(self, context: ContextTypes.DEFAULT_TYPE):
         """Start reminders for all existing users (called after startup)."""
         await self.reminder_system.start_all_user_reminders(self.job_queue)
+    
+    async def _set_bot_commands_delayed(self, context: ContextTypes.DEFAULT_TYPE):
+        """Set bot commands for slash command completions."""
+        try:
+            commands = [
+                BotCommand("start", "Start the bot and check setup"),
+                BotCommand("setup", "Configure reminder preferences"),
+                BotCommand("stats", "View your hydration statistics"),
+                BotCommand("help", "Show help and available commands")
+            ]
+            
+            await self.application.bot.set_my_commands(commands)
+            logger.info("Bot commands set successfully")
+        except Exception as e:
+            logger.error(f"Failed to set bot commands: {e}")
     
     async def stop(self):
         """Stop the bot (called automatically by run_polling)."""
