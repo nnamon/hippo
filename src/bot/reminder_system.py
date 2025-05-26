@@ -165,9 +165,12 @@ class ReminderSystem:
         """Send a water reminder to the user."""
         try:
             # First expire any active reminders for this user
-            expired_count = await self.database.expire_user_active_reminders(user_id)
+            expired_count, expired_messages = await self.database.expire_user_active_reminders(user_id)
             if expired_count > 0:
                 logger.info(f"Expired {expired_count} unacknowledged reminders for user {user_id}")
+                # Edit expired messages to show they're expired
+                for message_id, chat_id in expired_messages:
+                    await self._mark_reminder_as_expired(context, chat_id, message_id)
             
             # Generate reminder ID
             reminder_id = str(uuid.uuid4())
@@ -252,3 +255,33 @@ class ReminderSystem:
             self.cancel_user_reminders(job_queue, user_id)
         
         logger.info("Stopped all reminder jobs")
+    
+    async def _mark_reminder_as_expired(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int):
+        """Mark a reminder message as expired by editing it."""
+        try:
+            # Create expired button
+            keyboard = [[
+                InlineKeyboardButton("⏰ Expired - Missed this reminder", callback_data="expired_reminder")
+            ]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Try to edit as photo caption first (most reminders have images)
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    reply_markup=reply_markup
+                )
+            except Exception:
+                # If that fails, try as text message
+                try:
+                    await context.bot.edit_message_reply_markup(
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        reply_markup=reply_markup
+                    )
+                except Exception:
+                    # If we can't edit the message, just log it
+                    logger.debug(f"Could not edit expired message {message_id} in chat {chat_id}")
+        except Exception as e:
+            logger.error(f"Error marking reminder as expired: {e}")

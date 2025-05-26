@@ -138,6 +138,11 @@ class HippoBot:
             expired_reminders = await self.database.get_expired_reminders()
             
             for reminder in expired_reminders:
+                # Edit the message to show it's expired
+                await self.reminder_system._mark_reminder_as_expired(
+                    context, reminder['chat_id'], reminder['message_id']
+                )
+                
                 # Mark as missed
                 await self.database.record_hydration_event(
                     reminder['user_id'], 'missed', reminder['reminder_id']
@@ -256,6 +261,8 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         
         if query.data.startswith("confirm_water_"):
             await self._handle_water_confirmation(query)
+        elif query.data == "expired_reminder":
+            await query.answer("This reminder has expired. A new one will be sent soon!", show_alert=True)
         elif query.data.startswith("setup_"):
             await self._handle_setup_callback(query)
         elif query.data.startswith("waking_"):
