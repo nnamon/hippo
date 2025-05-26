@@ -175,7 +175,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             [InlineKeyboardButton("🌅 Set Waking Hours", callback_data="setup_waking_hours")],
             [InlineKeyboardButton("⏰ Set Reminder Interval", callback_data="setup_interval")],
             [InlineKeyboardButton("🎨 Choose Theme (Coming Soon)", callback_data="setup_theme")],
-            [InlineKeyboardButton("✅ Finish Setup", callback_data="setup_complete")]
+            [InlineKeyboardButton("✅ Finish Setup and View Settings", callback_data="setup_complete")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -260,16 +260,32 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             # Get appropriate response
             confirmation_message = self.content_manager.get_confirmation_message(hydration_level)
             
-            await query.edit_message_text(
-                f"✅ Great! {confirmation_message}",
-                parse_mode='Markdown'
-            )
+            # Try to edit the message (could be photo with caption or text message)
+            try:
+                # First try editing as photo caption
+                await query.edit_message_caption(
+                    caption=f"✅ Great! {confirmation_message}",
+                    parse_mode='Markdown'
+                )
+            except Exception:
+                # If that fails, try editing as text message
+                await query.edit_message_text(
+                    f"✅ Great! {confirmation_message}",
+                    parse_mode='Markdown'
+                )
             
             logger.info(f"User {user_id} confirmed water drinking for reminder {reminder_id}")
             
         except Exception as e:
             logger.error(f"Error handling water confirmation: {e}")
-            await query.edit_message_text("❌ Sorry, there was an error processing your confirmation.")
+            try:
+                await query.edit_message_caption(caption="❌ Sorry, there was an error processing your confirmation.")
+            except Exception:
+                try:
+                    await query.edit_message_text("❌ Sorry, there was an error processing your confirmation.")
+                except Exception:
+                    # If all else fails, send a new message
+                    await query.message.reply_text("❌ Sorry, there was an error processing your confirmation.")
     
     async def _handle_setup_callback(self, query):
         """Handle setup-related callback queries."""
@@ -289,7 +305,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
                 [InlineKeyboardButton("🌅 Set Waking Hours", callback_data="setup_waking_hours")],
                 [InlineKeyboardButton("⏰ Set Reminder Interval", callback_data="setup_interval")],
                 [InlineKeyboardButton("🎨 Choose Theme (Coming Soon)", callback_data="setup_theme")],
-                [InlineKeyboardButton("✅ Finish Setup", callback_data="setup_complete")]
+                [InlineKeyboardButton("✅ Finish Setup and View Settings", callback_data="setup_complete")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -314,6 +330,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             [InlineKeyboardButton("🌅 Early Bird (6 AM - 9 PM)", callback_data="waking_6_21")],
             [InlineKeyboardButton("☀️ Regular (7 AM - 10 PM)", callback_data="waking_7_22")], 
             [InlineKeyboardButton("🌙 Night Owl (9 AM - 12 AM)", callback_data="waking_9_24")],
+            [InlineKeyboardButton("🔄 24/7 Testing Mode", callback_data="waking_0_24")],
             [InlineKeyboardButton("🔧 Custom Hours", callback_data="waking_custom")],
             [InlineKeyboardButton("⬅️ Back to Setup", callback_data="setup_back")]
         ]
@@ -354,7 +371,14 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         
         completion_text = "🎉 *Setup Complete!*\n\n"
         completion_text += f"**Your Settings:**\n"
-        completion_text += f"• Waking Hours: {user_data['waking_start_hour']:02d}:{user_data['waking_start_minute']:02d} - {user_data['waking_end_hour']:02d}:{user_data['waking_end_minute']:02d}\n"
+        
+        # Format waking hours display
+        if user_data['waking_start_hour'] == 0 and user_data['waking_end_hour'] == 23:
+            waking_display = "24/7 (Testing Mode)"
+        else:
+            waking_display = f"{user_data['waking_start_hour']:02d}:{user_data['waking_start_minute']:02d} - {user_data['waking_end_hour']:02d}:{user_data['waking_end_minute']:02d}"
+        
+        completion_text += f"• Waking Hours: {waking_display}\n"
         completion_text += f"• Reminder Interval: {user_data['reminder_interval_minutes']} minutes\n"
         completion_text += f"• Theme: {user_data['theme']}\n\n"
         completion_text += "I'll start sending you water reminders during your waking hours! 🦛💧\n\n"
@@ -385,7 +409,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
                 [InlineKeyboardButton("🌅 Set Waking Hours", callback_data="setup_waking_hours")],
                 [InlineKeyboardButton("⏰ Set Reminder Interval", callback_data="setup_interval")],
                 [InlineKeyboardButton("🎨 Choose Theme (Coming Soon)", callback_data="setup_theme")],
-                [InlineKeyboardButton("✅ Finish Setup", callback_data="setup_complete")]
+                [InlineKeyboardButton("✅ Finish Setup and View Settings", callback_data="setup_complete")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -406,8 +430,11 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         # Parse preset hours (format: start_end)
         try:
             start_hour, end_hour = map(int, selection.split("_"))
-            # Handle 24-hour format (midnight = 0)
-            if end_hour == 24:
+            # Handle 24-hour format for 24/7 mode
+            if start_hour == 0 and end_hour == 24:
+                # 24/7 mode: set to 0-23 (all day)
+                start_hour, end_hour = 0, 23
+            elif end_hour == 24:
                 end_hour = 0
                 
             success = await self.database.update_user_waking_hours(
@@ -415,8 +442,13 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             )
             
             if success:
+                if start_hour == 0 and end_hour == 23:
+                    time_display = "24/7 (Testing Mode)"
+                else:
+                    time_display = f"{start_hour:02d}:00 - {end_hour:02d}:00"
+                
                 await query.edit_message_text(
-                    f"✅ Waking hours set to {start_hour:02d}:00 - {end_hour:02d}:00\n\n"
+                    f"✅ Waking hours set to {time_display}\n\n"
                     "Now let's set your reminder frequency!",
                     reply_markup=InlineKeyboardMarkup([[
                         InlineKeyboardButton("⏰ Set Reminder Interval", callback_data="setup_interval")

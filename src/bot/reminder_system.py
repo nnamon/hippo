@@ -65,17 +65,22 @@ class ReminderSystem:
             user_data = await self.database.get_user(user_id)
             
             if not user_data or not user_data['is_active']:
+                logger.debug(f"User {user_id} not active or not found")
                 return
             
             # Check if it's within waking hours
             if not self._is_within_waking_hours(user_data):
+                logger.debug(f"User {user_id} outside waking hours")
                 return
             
             # Check if enough time has passed since last reminder
-            if not await self._should_send_reminder(user_id, user_data['reminder_interval_minutes']):
+            should_send = await self._should_send_reminder(user_id, user_data['reminder_interval_minutes'])
+            if not should_send:
+                logger.debug(f"User {user_id} not ready for reminder yet")
                 return
             
             # Send the reminder
+            logger.info(f"Sending water reminder to user {user_id}")
             await self._send_water_reminder(context, user_id, user_data)
             
         except Exception as e:
@@ -83,18 +88,29 @@ class ReminderSystem:
     
     def _is_within_waking_hours(self, user_data: Dict) -> bool:
         """Check if current time is within user's waking hours."""
-        now = datetime.now().time()
+        start_hour = user_data['waking_start_hour']
+        end_hour = user_data['waking_end_hour']
         
-        start_time = time(user_data['waking_start_hour'], user_data['waking_start_minute'])
-        end_time = time(user_data['waking_end_hour'], user_data['waking_end_minute'])
+        # 24/7 mode (0-23 hours)
+        if start_hour == 0 and end_hour == 23:
+            logger.debug(f"User {user_data.get('user_id', 'unknown')} in 24/7 mode - always active")
+            return True
+        
+        now = datetime.now().time()
+        start_time = time(start_hour, user_data['waking_start_minute'])
+        end_time = time(end_hour, user_data['waking_end_minute'])
         
         # Handle case where end time is next day (e.g., 22:00 to 06:00)
         if start_time <= end_time:
             # Normal case: 07:00 to 22:00
-            return start_time <= now <= end_time
+            is_within = start_time <= now <= end_time
+            logger.debug(f"User {user_data.get('user_id', 'unknown')} waking hours check: {start_time} <= {now} <= {end_time} = {is_within}")
+            return is_within
         else:
             # Overnight case: 22:00 to 06:00
-            return now >= start_time or now <= end_time
+            is_within = now >= start_time or now <= end_time
+            logger.debug(f"User {user_data.get('user_id', 'unknown')} overnight waking hours: {now} >= {start_time} or {now} <= {end_time} = {is_within}")
+            return is_within
     
     async def _should_send_reminder(self, user_id: int, interval_minutes: int) -> bool:
         """Check if enough time has passed since the last reminder."""
