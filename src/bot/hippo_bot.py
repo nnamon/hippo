@@ -37,18 +37,8 @@ class HippoBot:
         self.job_queue: Optional[JobQueue] = None
         self.reminder_system: Optional[ReminderSystem] = None
         
-    async def start(self):
+    def start(self):
         """Start the bot."""
-        # Initialize database
-        self.database = DatabaseManager()
-        await self.database.initialize()
-        
-        # Initialize content manager
-        self.content_manager = ContentManager()
-        
-        # Initialize reminder system
-        self.reminder_system = ReminderSystem(self.database, self.content_manager)
-        
         # Build application
         self.application = Application.builder().token(self.token).build()
         self.job_queue = self.application.job_queue
@@ -59,15 +49,30 @@ class HippoBot:
         # Start background jobs
         self._schedule_background_jobs()
         
+        # Initialize database and other components when the bot starts
+        self.application.post_init = self._post_init
+        
+        # Start the bot with polling (this handles the event loop)
+        self.application.run_polling()
+    
+    async def _post_init(self, application):
+        """Initialize components after the application starts."""
+        # Initialize database
+        self.database = DatabaseManager()
+        await self.database.initialize()
+        
+        # Initialize content manager
+        self.content_manager = ContentManager()
+        
+        # Initialize reminder system
+        self.reminder_system = ReminderSystem(self.database, self.content_manager)
+        
         # Start reminders for existing users (schedule for after startup)
         self.job_queue.run_once(
             self._start_user_reminders_delayed,
             when=10,  # Start after 10 seconds
             name="start_user_reminders"
         )
-        
-        # Start the bot with polling
-        await self.application.run_polling()
         
     async def _start_user_reminders_delayed(self, context: ContextTypes.DEFAULT_TYPE):
         """Start reminders for all existing users (called after startup)."""
@@ -323,6 +328,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
     async def _setup_interval(self, query):
         """Handle reminder interval setup."""
         keyboard = [
+            [InlineKeyboardButton("⏰ Every 1 minute (testing)", callback_data="interval_1")],
             [InlineKeyboardButton("⏰ Every 15 minutes", callback_data="interval_15")],
             [InlineKeyboardButton("⏰ Every 30 minutes", callback_data="interval_30")],
             [InlineKeyboardButton("⏰ Every hour", callback_data="interval_60")],
@@ -434,7 +440,9 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             success = await self.database.update_user_reminder_interval(user_id, interval_minutes)
             
             if success:
-                if interval_minutes < 60:
+                if interval_minutes == 1:
+                    interval_text = "1 minute (testing mode)"
+                elif interval_minutes < 60:
                     interval_text = f"{interval_minutes} minutes"
                 else:
                     hours = interval_minutes // 60

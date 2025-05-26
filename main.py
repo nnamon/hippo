@@ -4,7 +4,6 @@ Hippo - Telegram Water Reminder Bot
 Main entry point for the application.
 """
 
-import asyncio
 import logging
 import os
 import sys
@@ -22,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def main():
+def main():
     """Main application entry point."""
     # Load environment variables
     config_path = Path(__file__).parent / "config.env"
@@ -43,16 +42,13 @@ async def main():
     
     try:
         logger.info("Starting Hippo bot...")
-        await bot.start()
+        bot.start()
     except KeyboardInterrupt:
         logger.info("Received interrupt signal")
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         raise
-    finally:
-        await bot.stop()
-        logger.info("Bot stopped")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
