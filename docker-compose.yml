@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  hippo-bot:
+    build: .
+    container_name: hippo-water-bot
+    restart: unless-stopped
+    volumes:
+      # Persist database and config
+      - ./config.env:/app/config.env:ro
+      - ./data:/app/data
+      # Optional: mount custom images
+      - ./assets/images:/app/assets/images
+    environment:
+      - DATABASE_PATH=/app/data/hippo.db
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sqlite3; sqlite3.connect('/app/data/hippo.db').close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Optional: Add monitoring service
+  # watchtower:
+  #   image: containrrr/watchtower
+  #   container_name: hippo-watchtower
+  #   restart: unless-stopped
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   command: --interval 30 --cleanup hippo-water-bot
+  #   environment:
+  #     - WATCHTOWER_NOTIFICATIONS=email
+  #     - WATCHTOWER_NOTIFICATION_EMAIL_FROM=your-email@example.com
+  #     - WATCHTOWER_NOTIFICATION_EMAIL_TO=your-email@example.com
