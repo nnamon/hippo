@@ -16,4 +16,36 @@ Hippo is a Telegram bot that reminds you to drink water on a regular interval wi
 
 ## Implementation
 
-* The project should be implemented as a Python project.
+### Technical Stack
+* **Language**: Python 3.9+
+* **Bot Framework**: python-telegram-bot with async support and job queue
+* **Database**: SQLite for simplicity
+* **Deployment**: Docker containers for Digital Ocean droplet
+
+### Content Management
+* **Cartoon Images**: 6-state hydration system (0%, 20%, 40%, 60%, 80%, 100%)
+* **Image Organization**: Theme-based arrays with placeholder support initially
+* **Poems**: Predefined poems for MVP, extensible for future API integration
+* **Themes**: Starting with 'default' theme, expandable architecture
+
+### User Experience
+* **Reminder Scheduling**: Interval-based (every X minutes) during custom waking hours
+* **Hydration Tracking**: Simple acknowledgment buttons with 30-minute expiration
+* **Missed Tracking**: Expired reminders count as missed for statistics
+* **Onboarding Flow**: Welcome → waking hours setup → start reminders
+
+### MVP Features (Version 1.0)
+* User registration and onboarding
+* Custom waking hours configuration
+* Interval-based water reminders
+* Acknowledgment buttons with expiration logic
+* 6-level hydration state tracking
+* Basic statistics via /stats command
+* Placeholder content system
+
+### Future Enhancements
+* Multiple cartoon themes
+* Advanced scheduling options
+* Detailed hydration analytics
+* Web interface for configuration
+* External poem API integration

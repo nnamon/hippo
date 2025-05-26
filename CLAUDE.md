@@ -18,10 +18,39 @@ This is a Python-based Telegram bot project with the following core components:
 
 ## Implementation Notes
 
-- The project is designed to be implemented in Python
-- User data and hydration metrics require server-side persistence
-- Cartoon images are organized in themed sets of 6 corresponding to hydration states
-- Bot integrates with Telegram's messaging API for reminders and user interactions
+- The project is implemented in Python 3.9+ using python-telegram-bot framework
+- SQLite database for user data and hydration metrics persistence
+- Cartoon images organized in themed arrays of 6 hydration states (0%, 20%, 40%, 60%, 80%, 100%)
+- Bot uses async architecture with job queue for scheduled reminders
+- Deployment via Docker containers on Digital Ocean
+
+## Commands for Development
+
+**Install Dependencies:**
+```bash
+pip install -r requirements.txt
+```
+
+**Run the Bot:**
+```bash
+python main.py
+```
+
+**Project Structure:**
+```
+src/
+├── bot/           # Bot logic and handlers
+├── database/      # SQLite models and operations  
+└── content/       # Poems and image management
+assets/
+└── images/        # Cartoon image files
+```
+
+## Configuration
+
+- Copy `config.env.example` to `config.env` and add your Telegram bot token
+- Bot token obtained from @BotFather on Telegram
+- Database file (`hippo.db`) created automatically on first run
 
 ## Development Workflow
 
