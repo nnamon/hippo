@@ -172,6 +172,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         
         # Create setup keyboard
         keyboard = [
+            [InlineKeyboardButton("🌍 Set Timezone", callback_data="setup_timezone")],
             [InlineKeyboardButton("🌅 Set Waking Hours", callback_data="setup_waking_hours")],
             [InlineKeyboardButton("⏰ Set Reminder Interval", callback_data="setup_interval")],
             [InlineKeyboardButton("🎨 Choose Theme (Coming Soon)", callback_data="setup_theme")],
@@ -181,6 +182,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         
         setup_text = "🛠️ *Setup Your Hippo Bot*\n\n"
         setup_text += "Let's configure your water reminder preferences:\n\n"
+        setup_text += "• **Timezone**: Your local timezone for accurate reminders\n"
         setup_text += "• **Waking Hours**: When you want to receive reminders\n"
         setup_text += "• **Reminder Interval**: How often to remind you\n"
         setup_text += "• **Theme**: Visual style for your reminders\n\n"
@@ -238,6 +240,8 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             await self._handle_waking_hours_selection(query)
         elif query.data.startswith("interval_"):
             await self._handle_interval_selection(query)
+        elif query.data.startswith("timezone_"):
+            await self._handle_timezone_selection(query)
         else:
             await query.edit_message_text("Unknown button action")
     
@@ -291,7 +295,9 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         """Handle setup-related callback queries."""
         action = query.data.replace("setup_", "")
         
-        if action == "waking_hours":
+        if action == "timezone":
+            await self._setup_timezone(query)
+        elif action == "waking_hours":
             await self._setup_waking_hours(query)
         elif action == "interval":
             await self._setup_interval(query)
@@ -302,6 +308,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         elif action == "back":
             # Return to main setup menu
             keyboard = [
+                [InlineKeyboardButton("🌍 Set Timezone", callback_data="setup_timezone")],
                 [InlineKeyboardButton("🌅 Set Waking Hours", callback_data="setup_waking_hours")],
                 [InlineKeyboardButton("⏰ Set Reminder Interval", callback_data="setup_interval")],
                 [InlineKeyboardButton("🎨 Choose Theme (Coming Soon)", callback_data="setup_theme")],
@@ -311,6 +318,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             
             setup_text = "🛠️ *Setup Your Hippo Bot*\n\n"
             setup_text += "Let's configure your water reminder preferences:\n\n"
+            setup_text += "• **Timezone**: Your local timezone for accurate reminders\n"
             setup_text += "• **Waking Hours**: When you want to receive reminders\n"
             setup_text += "• **Reminder Interval**: How often to remind you\n"
             setup_text += "• **Theme**: Visual style for your reminders\n\n"
@@ -323,6 +331,25 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             )
         else:
             await query.edit_message_text("Unknown setup option")
+    
+    async def _setup_timezone(self, query):
+        """Handle timezone setup."""
+        keyboard = [
+            [InlineKeyboardButton("🇸🇬 Singapore (UTC+8)", callback_data="timezone_Asia/Singapore")],
+            [InlineKeyboardButton("🇺🇸 US Eastern (UTC-5)", callback_data="timezone_America/New_York")],
+            [InlineKeyboardButton("🇺🇸 US Pacific (UTC-8)", callback_data="timezone_America/Los_Angeles")],
+            [InlineKeyboardButton("🇬🇧 UK/London (UTC+0)", callback_data="timezone_Europe/London")],
+            [InlineKeyboardButton("🇯🇵 Japan/Tokyo (UTC+9)", callback_data="timezone_Asia/Tokyo")],
+            [InlineKeyboardButton("🇦🇺 Australia/Sydney (UTC+11)", callback_data="timezone_Australia/Sydney")],
+            [InlineKeyboardButton("⬅️ Back to Setup", callback_data="setup_back")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        text = "🌍 *Choose Your Timezone*\n\n"
+        text += "Select your timezone for accurate reminder scheduling:\n\n"
+        text += "Current default is Singapore (UTC+8)"
+        
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=reply_markup)
     
     async def _setup_waking_hours(self, query):
         """Handle waking hours setup."""
@@ -378,6 +405,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         else:
             waking_display = f"{user_data['waking_start_hour']:02d}:{user_data['waking_start_minute']:02d} - {user_data['waking_end_hour']:02d}:{user_data['waking_end_minute']:02d}"
         
+        completion_text += f"• Timezone: {user_data.get('timezone', 'Asia/Singapore')}\n"
         completion_text += f"• Waking Hours: {waking_display}\n"
         completion_text += f"• Reminder Interval: {user_data['reminder_interval_minutes']} minutes\n"
         completion_text += f"• Theme: {user_data['theme']}\n\n"
@@ -493,6 +521,40 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         except Exception as e:
             logger.error(f"Error setting reminder interval: {e}")
             await query.edit_message_text("❌ Error setting reminder interval. Please try again.")
+    
+    async def _handle_timezone_selection(self, query):
+        """Handle timezone selection."""
+        user_id = query.from_user.id
+        timezone_str = query.data.replace("timezone_", "")
+        
+        try:
+            success = await self.database.update_user_timezone(user_id, timezone_str)
+            
+            if success:
+                # Get display name for timezone
+                timezone_names = {
+                    "Asia/Singapore": "Singapore (UTC+8)",
+                    "America/New_York": "US Eastern",
+                    "America/Los_Angeles": "US Pacific", 
+                    "Europe/London": "UK/London",
+                    "Asia/Tokyo": "Japan/Tokyo",
+                    "Australia/Sydney": "Australia/Sydney"
+                }
+                display_name = timezone_names.get(timezone_str, timezone_str)
+                
+                await query.edit_message_text(
+                    f"✅ Timezone set to {display_name}!\n\n"
+                    "Now let's set your waking hours!",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🌅 Set Waking Hours", callback_data="setup_waking_hours")
+                    ]])
+                )
+            else:
+                await query.edit_message_text("❌ Error saving timezone. Please try again.")
+                
+        except Exception as e:
+            logger.error(f"Error setting timezone: {e}")
+            await query.edit_message_text("❌ Error setting timezone. Please try again.")
         
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular text messages."""

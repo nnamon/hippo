@@ -47,6 +47,7 @@ class DatabaseManager:
                 waking_end_minute INTEGER DEFAULT 0,
                 reminder_interval_minutes INTEGER DEFAULT 60,
                 theme TEXT DEFAULT 'default',
+                timezone TEXT DEFAULT 'Asia/Singapore',
                 is_active BOOLEAN DEFAULT 1
             )
         """)
@@ -78,6 +79,18 @@ class DatabaseManager:
         """)
         
         await self.connection.commit()
+        
+        # Add timezone column if it doesn't exist (migration for existing databases)
+        try:
+            await self.connection.execute("""
+                ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'Asia/Singapore'
+            """)
+            await self.connection.commit()
+            logger.info("Added timezone column to users table")
+        except Exception:
+            # Column already exists, ignore the error
+            pass
+        
         logger.info("Database tables created/verified")
     
     # User operations
@@ -134,6 +147,23 @@ class DatabaseManager:
             return True
         except Exception as e:
             logger.error(f"Error updating reminder interval for user {user_id}: {e}")
+            return False
+    
+    async def update_user_timezone(self, user_id: int, timezone: str) -> bool:
+        """Update user's timezone."""
+        try:
+            # Validate timezone
+            import pytz
+            pytz.timezone(timezone)  # This will raise exception if invalid
+            
+            await self.connection.execute("""
+                UPDATE users SET timezone = ? WHERE user_id = ?
+            """, (timezone, user_id))
+            await self.connection.commit()
+            logger.info(f"Updated timezone for user {user_id} to {timezone}")
+            return True
+        except Exception as e:
+            logger.error(f"Error updating timezone for user {user_id}: {e}")
             return False
     
     # Hydration event operations

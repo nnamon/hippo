@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timedelta, time
 from typing import Dict, List, Optional
 from pathlib import Path
+import pytz
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -96,20 +97,31 @@ class ReminderSystem:
             logger.debug(f"User {user_data.get('user_id', 'unknown')} in 24/7 mode - always active")
             return True
         
-        now = datetime.now().time()
+        # Get user's timezone, default to Singapore if not set
+        user_tz_str = user_data.get('timezone', 'Asia/Singapore')
+        try:
+            user_tz = pytz.timezone(user_tz_str)
+        except Exception as e:
+            logger.error(f"Invalid timezone {user_tz_str} for user {user_data.get('user_id', 'unknown')}, using Singapore")
+            user_tz = pytz.timezone('Asia/Singapore')
+        
+        # Get current time in user's timezone
+        now_utc = datetime.now(pytz.UTC)
+        now_local = now_utc.astimezone(user_tz).time()
+        
         start_time = time(start_hour, user_data['waking_start_minute'])
         end_time = time(end_hour, user_data['waking_end_minute'])
         
         # Handle case where end time is next day (e.g., 22:00 to 06:00)
         if start_time <= end_time:
             # Normal case: 07:00 to 22:00
-            is_within = start_time <= now <= end_time
-            logger.debug(f"User {user_data.get('user_id', 'unknown')} waking hours check: {start_time} <= {now} <= {end_time} = {is_within}")
+            is_within = start_time <= now_local <= end_time
+            logger.debug(f"User {user_data.get('user_id', 'unknown')} waking hours check in {user_tz_str}: {start_time} <= {now_local} <= {end_time} = {is_within}")
             return is_within
         else:
             # Overnight case: 22:00 to 06:00
-            is_within = now >= start_time or now <= end_time
-            logger.debug(f"User {user_data.get('user_id', 'unknown')} overnight waking hours: {now} >= {start_time} or {now} <= {end_time} = {is_within}")
+            is_within = now_local >= start_time or now_local <= end_time
+            logger.debug(f"User {user_data.get('user_id', 'unknown')} overnight waking hours in {user_tz_str}: {now_local} >= {start_time} or {now_local} <= {end_time} = {is_within}")
             return is_within
     
     async def _should_send_reminder(self, user_id: int, interval_minutes: int) -> bool:
