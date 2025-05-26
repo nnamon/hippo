@@ -149,41 +149,6 @@ class ContentManager:
         """Get list of available theme names."""
         return list(self.themes.keys())
     
-    def create_placeholder_images(self) -> None:
-        """Create placeholder image files for development."""
-        from PIL import Image, ImageDraw, ImageFont
-        
-        # Create assets/images directory if it doesn't exist
-        assets_dir = Path("assets/images")
-        assets_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Hydration levels and colors
-        levels = [
-            ("dehydrated", "#FF6B6B", "😵"),
-            ("low_hydration", "#FFA726", "😟"), 
-            ("moderate", "#FFEB3B", "😐"),
-            ("good_hydration", "#66BB6A", "😊"),
-            ("great_hydration", "#42A5F5", "😄"),
-            ("perfect_hydration", "#7E57C2", "🤩")
-        ]
-        
-        for filename, color, emoji in levels:
-            # Create a simple colored image with emoji
-            img = Image.new('RGB', (200, 200), color)
-            draw = ImageDraw.Draw(img)
-            
-            # Add emoji text (simplified - may not render perfectly)
-            try:
-                draw.text((100, 100), emoji, fill='white', anchor='mm')
-            except:
-                # Fallback to simple text if emoji doesn't work
-                draw.text((100, 100), filename.replace('_', ' ').title(), 
-                         fill='white', anchor='mm')
-            
-            # Save placeholder image
-            img.save(assets_dir / f"{filename}.png")
-        
-        print(f"Created placeholder images in {assets_dir}")
 
 
 # Create a global instance for easy access
