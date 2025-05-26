@@ -59,26 +59,24 @@ class HippoBot:
         # Start background jobs
         self._schedule_background_jobs()
         
-        # Start the bot
-        await self.application.initialize()
-        await self.application.start()
-        await self.application.updater.start_polling()
+        # Start reminders for existing users (schedule for after startup)
+        self.job_queue.run_once(
+            self._start_user_reminders_delayed,
+            when=10,  # Start after 10 seconds
+            name="start_user_reminders"
+        )
         
-        # Start reminders for existing users
+        # Start the bot with polling
+        await self.application.run_polling()
+        
+    async def _start_user_reminders_delayed(self, context: ContextTypes.DEFAULT_TYPE):
+        """Start reminders for all existing users (called after startup)."""
         await self.reminder_system.start_all_user_reminders(self.job_queue)
-        
-        # Keep running
-        await self.application.updater.idle()
-        
+    
     async def stop(self):
-        """Stop the bot."""
+        """Stop the bot (called automatically by run_polling)."""
         if self.reminder_system and self.job_queue:
             self.reminder_system.stop_all_reminders(self.job_queue)
-            
-        if self.application:
-            await self.application.updater.stop()
-            await self.application.stop()
-            await self.application.shutdown()
             
         if self.database:
             await self.database.close()
@@ -280,6 +278,28 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             await query.edit_message_text("🎨 Theme selection coming soon! For now, you'll use the default hippo theme.")
         elif action == "complete":
             await self._complete_setup(query)
+        elif action == "back":
+            # Return to main setup menu
+            keyboard = [
+                [InlineKeyboardButton("🌅 Set Waking Hours", callback_data="setup_waking_hours")],
+                [InlineKeyboardButton("⏰ Set Reminder Interval", callback_data="setup_interval")],
+                [InlineKeyboardButton("🎨 Choose Theme (Coming Soon)", callback_data="setup_theme")],
+                [InlineKeyboardButton("✅ Finish Setup", callback_data="setup_complete")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            setup_text = "🛠️ *Setup Your Hippo Bot*\n\n"
+            setup_text += "Let's configure your water reminder preferences:\n\n"
+            setup_text += "• **Waking Hours**: When you want to receive reminders\n"
+            setup_text += "• **Reminder Interval**: How often to remind you\n"
+            setup_text += "• **Theme**: Visual style for your reminders\n\n"
+            setup_text += "Choose an option below to get started:"
+            
+            await query.edit_message_text(
+                setup_text, 
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
         else:
             await query.edit_message_text("Unknown setup option")
     
@@ -354,7 +374,27 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             )
             return
         elif selection == "back":
-            await self.setup_command(query, None)  # Return to main setup
+            # Return to main setup menu
+            keyboard = [
+                [InlineKeyboardButton("🌅 Set Waking Hours", callback_data="setup_waking_hours")],
+                [InlineKeyboardButton("⏰ Set Reminder Interval", callback_data="setup_interval")],
+                [InlineKeyboardButton("🎨 Choose Theme (Coming Soon)", callback_data="setup_theme")],
+                [InlineKeyboardButton("✅ Finish Setup", callback_data="setup_complete")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            setup_text = "🛠️ *Setup Your Hippo Bot*\n\n"
+            setup_text += "Let's configure your water reminder preferences:\n\n"
+            setup_text += "• **Waking Hours**: When you want to receive reminders\n"
+            setup_text += "• **Reminder Interval**: How often to remind you\n"
+            setup_text += "• **Theme**: Visual style for your reminders\n\n"
+            setup_text += "Choose an option below to get started:"
+            
+            await query.edit_message_text(
+                setup_text, 
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
             return
         
         # Parse preset hours (format: start_end)
