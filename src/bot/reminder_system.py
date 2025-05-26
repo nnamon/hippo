@@ -115,28 +115,35 @@ class ReminderSystem:
     async def _should_send_reminder(self, user_id: int, interval_minutes: int) -> bool:
         """Check if enough time has passed since the last reminder."""
         try:
-            # Get the last reminder time from database
+            # Get the last reminder time from either active reminders or hydration events
             async with self.database.connection.execute("""
-                SELECT MAX(created_at) as last_reminder
-                FROM active_reminders 
-                WHERE user_id = ?
-                UNION
-                SELECT MAX(created_at) as last_reminder
-                FROM hydration_events 
-                WHERE user_id = ?
-                ORDER BY last_reminder DESC
-                LIMIT 1
+                SELECT MAX(last_reminder) as last_reminder FROM (
+                    SELECT MAX(created_at) as last_reminder
+                    FROM active_reminders 
+                    WHERE user_id = ?
+                    UNION ALL
+                    SELECT MAX(created_at) as last_reminder
+                    FROM hydration_events 
+                    WHERE user_id = ?
+                )
             """, (user_id, user_id)) as cursor:
                 result = await cursor.fetchone()
             
             if not result or not result[0]:
                 # No previous reminders, send one now
+                logger.debug(f"User {user_id}: No previous reminders found, sending first reminder")
                 return True
             
             last_reminder_time = datetime.fromisoformat(result[0])
-            time_since_last = datetime.now() - last_reminder_time
+            current_time = datetime.now()
+            time_since_last = current_time - last_reminder_time
+            required_interval = timedelta(minutes=interval_minutes)
             
-            return time_since_last >= timedelta(minutes=interval_minutes)
+            should_send = time_since_last >= required_interval
+            logger.debug(f"User {user_id}: Last reminder: {last_reminder_time}, Current: {current_time}, "
+                        f"Time since: {time_since_last}, Required: {required_interval}, Should send: {should_send}")
+            
+            return should_send
             
         except Exception as e:
             logger.error(f"Error checking reminder timing for user {user_id}: {e}")
@@ -145,6 +152,11 @@ class ReminderSystem:
     async def _send_water_reminder(self, context: ContextTypes.DEFAULT_TYPE, user_id: int, user_data: Dict):
         """Send a water reminder to the user."""
         try:
+            # First expire any active reminders for this user
+            expired_count = await self.database.expire_user_active_reminders(user_id)
+            if expired_count > 0:
+                logger.info(f"Expired {expired_count} unacknowledged reminders for user {user_id}")
+            
             # Generate reminder ID
             reminder_id = str(uuid.uuid4())
             

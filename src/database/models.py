@@ -237,3 +237,30 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error getting expired reminders: {e}")
             return []
+    
+    async def expire_user_active_reminders(self, user_id: int) -> int:
+        """Expire all active reminders for a user and record as missed events."""
+        try:
+            # First get all active reminders for this user
+            async with self.connection.execute("""
+                SELECT reminder_id FROM active_reminders 
+                WHERE user_id = ?
+            """, (user_id,)) as cursor:
+                reminders = await cursor.fetchall()
+            
+            expired_count = 0
+            for (reminder_id,) in reminders:
+                # Record as missed event
+                await self.record_hydration_event(user_id, 'missed', reminder_id)
+                # Remove from active reminders
+                await self.remove_active_reminder(reminder_id)
+                expired_count += 1
+            
+            if expired_count > 0:
+                logger.info(f"Expired {expired_count} active reminders for user {user_id}")
+            
+            return expired_count
+            
+        except Exception as e:
+            logger.error(f"Error expiring reminders for user {user_id}: {e}")
+            return 0
