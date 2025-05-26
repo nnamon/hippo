@@ -202,28 +202,47 @@ class DatabaseManager:
             return {'confirmed': 0, 'missed': 0}
     
     async def calculate_hydration_level(self, user_id: int) -> int:
-        """Calculate current hydration level (0-5) based on recent activity."""
-        stats = await self.get_user_hydration_stats(user_id, days=1)  # Last 24 hours
-        total_events = stats['confirmed'] + stats['missed']
-        
-        if total_events == 0:
-            return 2  # Default moderate level
-        
-        confirmed_ratio = stats['confirmed'] / total_events
-        
-        # Map ratio to hydration level (0-5)
-        if confirmed_ratio >= 0.9:
-            return 5  # Perfect hydration
-        elif confirmed_ratio >= 0.75:
-            return 4  # Great hydration
-        elif confirmed_ratio >= 0.6:
-            return 3  # Good hydration
-        elif confirmed_ratio >= 0.4:
-            return 2  # Moderate hydration
-        elif confirmed_ratio >= 0.2:
-            return 1  # Low hydration
-        else:
-            return 0  # Dehydrated
+        """Calculate current hydration level (0-5) based on rolling average of past 6 reminders."""
+        try:
+            # Get the last 6 hydration events (confirmed or missed) ordered by most recent
+            async with self.connection.execute("""
+                SELECT event_type FROM hydration_events
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT 6
+            """, (user_id,)) as cursor:
+                recent_events = await cursor.fetchall()
+            
+            if not recent_events:
+                return 2  # Default moderate level if no history
+            
+            # Count confirmed events in the recent 6
+            confirmed_count = sum(1 for (event_type,) in recent_events if event_type == 'confirmed')
+            total_events = len(recent_events)
+            
+            # Calculate ratio based on recent performance
+            confirmed_ratio = confirmed_count / total_events
+            
+            # Map ratio to hydration level (0-5) with more granular steps
+            if confirmed_ratio >= 0.85:  # 5-6 out of 6
+                level = 5  # Perfect hydration
+            elif confirmed_ratio >= 0.65:  # 4+ out of 6
+                level = 4  # Great hydration
+            elif confirmed_ratio >= 0.5:   # 3+ out of 6
+                level = 3  # Good hydration
+            elif confirmed_ratio >= 0.35:  # 2+ out of 6
+                level = 2  # Moderate hydration
+            elif confirmed_ratio >= 0.15:  # 1+ out of 6
+                level = 1  # Low hydration
+            else:  # 0 out of 6
+                level = 0  # Dehydrated
+            
+            logger.debug(f"User {user_id} hydration level: {confirmed_count}/{total_events} confirmed = {confirmed_ratio:.2f} ratio = level {level}")
+            return level
+                
+        except Exception as e:
+            logger.error(f"Error calculating hydration level for user {user_id}: {e}")
+            return 2  # Default moderate level on error
     
     # Active reminder operations
     async def create_active_reminder(self, user_id: int, reminder_id: str, 
