@@ -278,9 +278,12 @@ class DatabaseManager:
             """, (user_id,)) as cursor:
                 reminders = await cursor.fetchall()
             
+            logger.debug(f"Found {len(reminders)} active reminders for user {user_id}")
+            
             expired_count = 0
             expired_messages = []
             for (reminder_id, message_id, chat_id) in reminders:
+                logger.debug(f"Expiring reminder {reminder_id}: message_id={message_id}, chat_id={chat_id}")
                 # Record as missed event
                 await self.record_hydration_event(user_id, 'missed', reminder_id)
                 # Remove from active reminders

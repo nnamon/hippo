@@ -168,8 +168,10 @@ class ReminderSystem:
             expired_count, expired_messages = await self.database.expire_user_active_reminders(user_id)
             if expired_count > 0:
                 logger.info(f"Expired {expired_count} unacknowledged reminders for user {user_id}")
+                logger.debug(f"Expired messages to edit: {expired_messages}")
                 # Edit expired messages to show they're expired
                 for message_id, chat_id in expired_messages:
+                    logger.debug(f"Editing message {message_id} in chat {chat_id}")
                     await self._mark_reminder_as_expired(context, chat_id, message_id)
             
             # Generate reminder ID
@@ -265,23 +267,15 @@ class ReminderSystem:
             ]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            # Try to edit as photo caption first (most reminders have images)
+            # Edit message reply markup (works for both photo and text messages)
             try:
                 await context.bot.edit_message_reply_markup(
                     chat_id=chat_id,
                     message_id=message_id,
                     reply_markup=reply_markup
                 )
-            except Exception:
-                # If that fails, try as text message
-                try:
-                    await context.bot.edit_message_reply_markup(
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        reply_markup=reply_markup
-                    )
-                except Exception:
-                    # If we can't edit the message, just log it
-                    logger.debug(f"Could not edit expired message {message_id} in chat {chat_id}")
+                logger.debug(f"Successfully marked reminder {message_id} as expired in chat {chat_id}")
+            except Exception as e:
+                logger.warning(f"Could not edit expired message {message_id} in chat {chat_id}: {e}")
         except Exception as e:
             logger.error(f"Error marking reminder as expired: {e}")
