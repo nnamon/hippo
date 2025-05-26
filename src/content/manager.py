@@ -15,6 +15,7 @@ class ContentManager:
         self.themes = self._load_themes()
         self.poems = self._load_poems()
         self.confirmation_messages = self._load_confirmation_messages()
+        self.recent_poems = []  # Track recently used poems to avoid repetition
     
     def _load_themes(self) -> Dict[str, List[str]]:
         """Load image themes configuration."""
@@ -43,7 +44,35 @@ class ContentManager:
             
             "💧 *Thirst No More*\n\nWhen your hippo friend reminds,\nIt's water time for hearts and minds.\nRefresh, renew, and feel so bright,\nHydration makes everything right! ✨",
             
-            "🌺 *Daily Dose*\n\nLike flowers need the morning rain,\nYour body needs water again.\nSip slowly, breathe, and take your time,\nHydration's rhythm, so sublime! 🌸"
+            "🌺 *Daily Dose*\n\nLike flowers need the morning rain,\nYour body needs water again.\nSip slowly, breathe, and take your time,\nHydration's rhythm, so sublime! 🌸",
+            
+            "🦛 *Hippo's Wisdom*\n\nJust like hippos love the stream,\nWater makes your body gleam.\nTake a break from work or play,\nHydrate yourself throughout the day! 💫",
+            
+            "🌈 *Rainbow Refresh*\n\nAfter rain comes colors bright,\nWater brings your cells delight.\nEach sip a step to feeling great,\nDon't let hydration come too late! 🌤️",
+            
+            "🎯 *Target: Hydration*\n\nYour mission, should you choose to accept:\nDrink water with no regret!\nYour body's counting on you now,\nTake a water-drinking vow! 🎪",
+            
+            "🌙 *Moonlit Sips*\n\nDay or night, the rule's the same,\nHydration is the winning game.\nLet water be your faithful friend,\nFrom morning start to evening's end! ⭐",
+            
+            "🎨 *Aqua Art*\n\nPaint your health with water clear,\nEvery drop brings wellness near.\nYour masterpiece needs H2O,\nWatch your energy levels grow! 🖌️",
+            
+            "🚀 *Hydration Launch*\n\nCountdown starts: 3... 2... 1...\nWater time has just begun!\nFuel your body's inner space,\nHydration at a steady pace! 🛸",
+            
+            "🎵 *Water Symphony*\n\nListen to your body's song,\nIt's been singing all along:\n'Water, water, crystal clear,\nBring me health throughout the year!' 🎶",
+            
+            "🌸 *Blossom & Bloom*\n\nLike a garden needs the rain,\nWater soothes away the strain.\nBloom with health, grow strong and tall,\nHydration conquers all! 🌻",
+            
+            "⚡ *Energy Boost*\n\nFeeling sluggish? Here's the key:\nWater sets your energy free!\nNo more fatigue, no more yawns,\nHydration brings the brightest dawns! 🌅",
+            
+            "🎭 *Hydration Theater*\n\nLife's a stage, and you're the star,\nWater helps you go so far.\nTake your cue, don't miss your line:\n'It's always water-drinking time!' 🎬",
+            
+            "🏖️ *Beach Vibes*\n\nWaves of wellness wash ashore,\nEvery sip brings so much more.\nSurf the tide of good hydration,\nJoin the water celebration! 🏄",
+            
+            "🔮 *Crystal Clear*\n\nGaze into your water glass,\nSee your healthy future pass.\nDestiny says 'Hydrate well!'\nBreak dehydration's spell! ✨",
+            
+            "🎪 *Circus of Sips*\n\nStep right up, don't be shy,\nWater's here to satisfy!\nThe greatest show for health on Earth,\nDiscover hydration's worth! 🤹",
+            
+            "🌿 *Nature's Call*\n\nBirds and bees all know it's true,\nWater's essential through and through.\nAnswer nature's gentle plea,\nSip some water, wild and free! 🦋"
         ]
     
     def _load_confirmation_messages(self) -> List[str]:
@@ -58,8 +87,25 @@ class ContentManager:
         ]
     
     def get_random_poem(self) -> str:
-        """Get a random hydration poem."""
-        return random.choice(self.poems)
+        """Get a random hydration poem, avoiding recent repeats."""
+        # If we've used more than half the poems, reset to allow all again
+        if len(self.recent_poems) >= len(self.poems) // 2:
+            self.recent_poems = self.recent_poems[-3:]  # Keep only last 3
+        
+        # Get available poems (not recently used)
+        available_poems = [poem for poem in self.poems if poem not in self.recent_poems]
+        
+        # If somehow all poems are recent (shouldn't happen), use all poems
+        if not available_poems:
+            available_poems = self.poems
+        
+        # Select a random poem from available ones
+        selected_poem = random.choice(available_poems)
+        
+        # Track this poem as recently used
+        self.recent_poems.append(selected_poem)
+        
+        return selected_poem
     
     def get_image_for_hydration_level(self, level: int, theme: str = "default") -> str:
         """Get image filename for the given hydration level and theme."""
