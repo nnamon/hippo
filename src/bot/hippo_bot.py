@@ -271,8 +271,8 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
                 )
                 return
             
-            # Get a random poem from the content manager
-            poem = self.content_manager.get_random_poem()
+            # Get a random poem from the content manager (async version for better performance)
+            poem = await self.content_manager.get_random_poem_async()
             
             # Format the response with a nice header
             poem_text = f"🎭 *Here's a water reminder poem for you:*\n\n{poem}\n\n"
