@@ -175,7 +175,7 @@ class TestDynamicPoemGeneration:
     def test_emoji_classification_war_theme(self, content_manager):
         """Test emoji classification for war/conflict themed poems."""
         emoji = content_manager._classify_poem_emoji(
-            "Battle Song", "Test Author",
+            "Battle Hymn", "Test Author",
             ["Soldiers march to war", "Victory or defeat awaits"]
         )
         assert emoji in ['⚔️', '🛡️', '🏺', '⚡', '🔥']
