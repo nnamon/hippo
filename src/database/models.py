@@ -256,9 +256,28 @@ class DatabaseManager:
             if not recent_events:
                 return 2  # Default moderate level if no history
             
-            # Count confirmed events in the recent 6
-            confirmed_count = sum(1 for (event_type,) in recent_events if event_type == 'confirmed')
-            total_events = len(recent_events)
+            # Extract event types from tuples
+            event_types = [event_type for (event_type,) in recent_events]
+            
+            # If we have less than 6 total reminders, add placeholders
+            # Half misses, half confirmations to start closer to 50%
+            if len(event_types) < 6:
+                missing_count = 6 - len(event_types)
+                placeholders = []
+                
+                # Add alternating confirmed and missed events
+                for i in range(missing_count):
+                    if i % 2 == 0:
+                        placeholders.append('missed')
+                    else:
+                        placeholders.append('confirmed')
+                
+                # Add placeholders to the end (older events)
+                event_types.extend(placeholders)
+            
+            # Count confirmed events in the 6 events (real + placeholders)
+            confirmed_count = sum(1 for event_type in event_types if event_type == 'confirmed')
+            total_events = len(event_types)  # Should always be 6 now
             
             # Calculate ratio based on recent performance
             confirmed_ratio = confirmed_count / total_events
