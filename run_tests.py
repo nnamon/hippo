@@ -33,6 +33,7 @@ def main():
     parser.add_argument("--integration", action="store_true", help="Run integration tests only")
     parser.add_argument("--docker", action="store_true", help="Run tests in Docker")
     parser.add_argument("--coverage", action="store_true", help="Generate coverage report")
+    parser.add_argument("--coverage-analysis", action="store_true", help="Run detailed coverage analysis")
     parser.add_argument("--lint", action="store_true", help="Run linting checks")
     parser.add_argument("--security", action="store_true", help="Run security checks")
     parser.add_argument("--all", action="store_true", help="Run all tests and checks")
@@ -40,7 +41,7 @@ def main():
     args = parser.parse_args()
     
     # If no specific tests specified, run unit tests
-    if not any([args.unit, args.integration, args.docker, args.lint, args.security, args.all]):
+    if not any([args.unit, args.integration, args.docker, args.lint, args.security, args.coverage_analysis, args.all]):
         args.unit = True
     
     success = True
@@ -62,9 +63,9 @@ def main():
             success = False
     
     if args.all or args.unit:
-        cmd = "pytest tests/ -v"
+        cmd = "pytest tests/ -v --tb=short"
         if args.coverage or args.all:
-            cmd += " --cov=src --cov-report=term-missing --cov-report=html:htmlcov"
+            cmd += " --cov=src --cov-report=term-missing --cov-report=html:htmlcov --cov-report=xml --cov-report=json --cov-branch --cov-fail-under=60"
         if not run_command(cmd, "Unit tests"):
             success = False
     
@@ -112,6 +113,10 @@ asyncio.run(test_full_integration())
         else:
             if not run_command("docker run --rm hippo-test:latest", "Docker tests"):
                 success = False
+    
+    if args.coverage_analysis or args.all:
+        if not run_command("python coverage_analysis.py", "Detailed coverage analysis"):
+            success = False
     
     print("\n" + "=" * 40)
     if success:
