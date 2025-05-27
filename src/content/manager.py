@@ -3,8 +3,11 @@ Content manager for Hippo bot - handles poems, images, and themes.
 """
 
 import random
-from typing import List, Dict, Any
+import asyncio
+import logging
+from typing import List, Dict, Any, Optional
 from pathlib import Path
+import httpx
 
 
 class ContentManager:
