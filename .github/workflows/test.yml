@@ -239,7 +239,7 @@ jobs:
             
             # Test content manager
             content_manager = ContentManager()
-            assert len(content_manager.poems) > 0
+            assert len(content_manager.fallback_poems) > 0
             assert len(content_manager.themes) > 0
             
             # Test reminder system
