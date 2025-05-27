@@ -92,7 +92,7 @@ async def test_full_integration():
     
     # Test content manager
     content_manager = ContentManager()
-    assert len(content_manager.poems) > 0
+    assert len(content_manager.fallback_poems) > 0
     
     # Test reminder system
     reminder_system = ReminderSystem(db, content_manager)
