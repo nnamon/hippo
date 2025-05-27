@@ -322,7 +322,7 @@ class TestNextReminderCalculation:
         # Should return to waking hours setup menu
         mock_callback_query.edit_message_text.assert_called_once()
         args, kwargs = mock_callback_query.edit_message_text.call_args
-        assert "Choose your waking hours" in args[0]
+        assert "Choose Your Waking Hours" in args[0]
 
     @pytest.mark.asyncio
     async def test_start_hour_selection(self, hippo_bot, mock_callback_query, mock_context):
