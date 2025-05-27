@@ -271,14 +271,41 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
                 )
                 return
             
+            user_id = update.effective_user.id
+            
+            # Get user's current hydration level and theme
+            hydration_level = await self.database.calculate_hydration_level(user_id)
+            user = await self.database.get_user(user_id)
+            theme = user.get('theme', 'bluey') if user else 'bluey'
+            
             # Get a random poem from the content manager (async version for better performance)
             poem = await self.content_manager.get_random_poem_async()
             
-            # Format the response with a nice header
-            poem_text = f"🎭 *Here's a water reminder poem for you:*\n\n{poem}\n\n"
-            poem_text += "💧 Remember to stay hydrated! 🦛"
+            # Get the appropriate image for the current hydration level
+            image_path = self.content_manager.get_image_for_hydration_level(hydration_level, theme)
             
-            await update.message.reply_text(poem_text, parse_mode='Markdown')
+            # Hydration level descriptions
+            level_descriptions = [
+                "😵 Dehydrated - Drink water now!",
+                "😟 Low hydration - Need more water", 
+                "😐 Moderate hydration - Doing okay",
+                "🙂 Good hydration - Keep it up!",
+                "😊 Great hydration - Well done!",
+                "🤩 Fully hydrated - Amazing!"
+            ]
+            
+            # Format the response with hydration status
+            poem_text = f"🎭 *Here's a water reminder poem for you:*\n\n{poem}\n\n"
+            poem_text += f"💧 *Current Hydration:* {level_descriptions[hydration_level]}\n\n"
+            poem_text += "Remember to stay hydrated! 🦛"
+            
+            # Send the image with the poem
+            with open(f"assets/{image_path}", 'rb') as image_file:
+                await update.message.reply_photo(
+                    photo=image_file,
+                    caption=poem_text,
+                    parse_mode='Markdown'
+                )
             
         except Exception as e:
             logger.error(f"Error handling poem command: {e}")
