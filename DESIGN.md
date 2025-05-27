@@ -2,50 +2,103 @@
 
 ## Overview
 
-Hippo is a Telegram bot that reminds you to drink water on a regular interval with a cute cartoon and a poem.
+Hippo is a Telegram bot that helps you stay hydrated by sending friendly water reminders with cute themed cartoons and poems. It features reactive hydration tracking, multiple cartoon themes, and intelligent reminder management.
 
 ## Core Concept
 
-* Users subscribe to the Telegram Bot, opening a channel that the bot can use to send reminders to drink water on a schedule the user requests.
-* The user can edit the schedule. This schedule may be on a regular interval such as every 15 mins or on a regular schedule such as the 18th minute on every hour.
-* When a reminder is sent, the user can acknowledge the reminder and confirm that they drank water.
-* User configuration and water drinking metrics are persisted server side.
-* Reminders include a cute poem and a cartoon image.
-* This cartoon image is based on how hydrated the user is based on their water drinking metrics. There are 6 states ranging from dehydrated to fully engorged.
-* The cartoon comes in sets of 6 corresponding to the 6 states, the user can choose a theme for the cartoons which selects from cartoon sets.
+* **Smart Reminders**: Users receive water reminders with themed cartoons, poems, and real-time hydration stats
+* **Reactive Tracking**: Hydration levels update based on the last 6 reminders for immediate feedback
+* **Theme Selection**: 4 cartoon themes (bluey, desert, spring, vivid) with 6 hydration states each
+* **Timezone Support**: Accurate local time handling for global users
+* **Auto-Expiration**: Previous reminders automatically expire when new ones arrive
+* **Comprehensive Stats**: Daily progress and rolling averages displayed in each reminder
 
-## Implementation
+## Implementation ✅ COMPLETED
 
 ### Technical Stack
-* **Language**: Python 3.9+
-* **Bot Framework**: python-telegram-bot with async support and job queue
-* **Database**: SQLite for simplicity
-* **Deployment**: Docker containers for Digital Ocean droplet
+* **Language**: Python 3.11 with async/await architecture
+* **Bot Framework**: python-telegram-bot v20.7 with job queue
+* **Database**: SQLite with aiosqlite for async operations
+* **Timezone**: pytz for accurate local time handling
+* **Deployment**: Docker containers with docker-compose
+* **Dependencies**: Minimal set (no PIL/Pillow needed)
 
-### Content Management
-* **Cartoon Images**: 6-state hydration system (0%, 20%, 40%, 60%, 80%, 100%)
-* **Image Organization**: Theme-based arrays with placeholder support initially
-* **Poems**: Predefined poems for MVP, extensible for future API integration
-* **Themes**: Starting with 'default' theme, expandable architecture
+### Content Management ✅ IMPLEMENTED
+* **Cartoon Themes**: 4 complete themes with 6 hydration states each
+  - bluey/ (cool blue tones - default)
+  - desert/ (warm sandy colors)
+  - spring/ (fresh green nature)
+  - vivid/ (bright and colorful)
+* **Image Mapping**: tile_0_0 → tile_1_2 mapped to hydration levels 0-5
+* **Poems**: 20 unique water-themed poems with anti-repetition logic
+* **Smart Selection**: Recent poem tracking prevents immediate repeats
 
-### User Experience
-* **Reminder Scheduling**: Interval-based (every X minutes) during custom waking hours
-* **Hydration Tracking**: Simple acknowledgment buttons with 30-minute expiration
-* **Missed Tracking**: Expired reminders count as missed for statistics
-* **Onboarding Flow**: Welcome → waking hours setup → start reminders
+### User Experience ✅ ENHANCED
+* **Guided Setup**: Comprehensive onboarding with timezone, waking hours, intervals, themes
+* **Rich Reminders**: Each reminder includes:
+  - Themed cartoon reflecting current hydration level
+  - Unique poem with variety
+  - Current hydration status (😵 to 🤩)
+  - Daily progress stats (3✅ 1❌ 75%)
+* **Visual Feedback**: Expired reminders show "⏰ Expired - Missed this reminder"
+* **Reset Option**: Complete data wipe with `/reset` command
+* **Slash Commands**: Auto-completion support for better UX
 
-### MVP Features (Version 1.0)
-* User registration and onboarding
-* Custom waking hours configuration
-* Interval-based water reminders
-* Acknowledgment buttons with expiration logic
-* 6-level hydration state tracking
-* Basic statistics via /stats command
-* Placeholder content system
+### Hydration Tracking ✅ REACTIVE SYSTEM
+* **6 Hydration Levels**: Based on rolling average of last 6 reminders
+  - Level 0: 😵 Dehydrated (0/6 confirmed)
+  - Level 1: 😟 Low hydration (1/6 confirmed) 
+  - Level 2: 😐 Moderate hydration (2/6 confirmed)
+  - Level 3: 😊 Good hydration (3/6 confirmed)
+  - Level 4: 😄 Great hydration (4+/6 confirmed)
+  - Level 5: 🤩 Perfect hydration (5-6/6 confirmed)
+* **Immediate Feedback**: Miss reminders → level drops quickly
+* **Quick Recovery**: Confirm reminders → level improves fast
 
-### Future Enhancements
-* Multiple cartoon themes
-* Advanced scheduling options
-* Detailed hydration analytics
-* Web interface for configuration
-* External poem API integration
+### Database Schema ✅ COMPLETE
+```sql
+users: user_id, settings, timezone(Asia/Singapore), theme(bluey)
+hydration_events: user_id, event_type(confirmed/missed), reminder_id, timestamp
+active_reminders: user_id, reminder_id, message_id, chat_id, expires_at
+```
+
+### Commands ✅ FULL FEATURE SET
+* `/start` - Welcome and setup check
+* `/setup` - Configure timezone, waking hours, intervals, themes
+* `/stats` - Comprehensive hydration statistics
+* `/reset` - Complete data wipe with confirmation
+* `/help` - Command reference
+
+### Key Features Delivered
+* ✅ **4 Cartoon Themes** with user selection
+* ✅ **Reactive Hydration Levels** (6-reminder rolling average)
+* ✅ **Enhanced Reminders** with stats and status
+* ✅ **Timezone Support** with global compatibility
+* ✅ **Smart Content** with 20 unique poems
+* ✅ **Visual Expiration** feedback for missed reminders
+* ✅ **Complete Reset** functionality
+* ✅ **Slash Command** completions
+* ✅ **Auto-Expiration** of old reminders
+* ✅ **Persistent Settings** across sessions
+
+## Architecture
+
+### Modular Design
+* `src/bot/` - Telegram bot handlers and UI logic
+* `src/database/` - SQLite models and data operations
+* `src/content/` - Poem and theme management
+* `assets/` - Organized theme folders with cartoon images
+
+### Async Architecture
+* Non-blocking database operations with aiosqlite
+* Job queue for scheduled reminders
+* Proper cleanup and resource management
+
+### Docker Deployment
+* Single-container deployment with docker-compose
+* Volume persistence for database
+* Asset bundling for theme images
+
+---
+
+**Status**: 🎉 **PRODUCTION READY** - Full feature set implemented and tested

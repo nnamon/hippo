@@ -36,6 +36,11 @@ pip install -r requirements.txt
 python main.py
 ```
 
+**Testing:**
+- ALWAYS test code changes using the Docker container: `docker-compose up --build -d`
+- Execute test code in the container: `docker-compose exec hippo-bot python -c "your_test_code"`
+- This ensures tests run with the same dependencies and environment as production
+
 **Project Structure:**
 ```
 src/
