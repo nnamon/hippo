@@ -157,70 +157,78 @@ class ContentManager:
     
     def _classify_poem_emoji(self, title: str, author: str, lines: List[str]) -> str:
         """Classify a poem and return an appropriate emoji based on keywords."""
+        import re
         text = f"{title} {author} {' '.join(lines)}".lower()
         
+        def has_word(word_list):
+            """Check if any whole words from word_list are in text."""
+            for word in word_list:
+                if re.search(r'\b' + re.escape(word) + r'\b', text):
+                    return True
+            return False
+        
         # Water/hydration themed emojis (most relevant)
-        if any(word in text for word in ['water', 'river', 'ocean', 'sea', 'rain', 'drop', 'flow', 'stream', 'wave']):
+        if has_word(['water', 'river', 'ocean', 'sea', 'rain', 'drop', 'flow', 'stream', 'wave']):
             return random.choice(['💧', '🌊', '💦', '🏊'])
         
         # Nature themed
-        if any(word in text for word in ['flower', 'rose', 'tree', 'garden', 'leaf', 'bloom', 'spring', 'nature']):
+        if has_word(['flower', 'rose', 'tree', 'garden', 'leaf', 'bloom', 'spring', 'nature']):
             return random.choice(['🌸', '🌺', '🌿', '🌱', '🌳', '🌷'])
         
         # Celestial/time themed  
-        if any(word in text for word in ['moon', 'star', 'sun', 'night', 'dawn', 'morning', 'evening']):
+        if has_word(['moon', 'star', 'sun', 'night', 'dawn', 'morning', 'evening']):
             return random.choice(['🌙', '🌟', '🌅', '⭐', '☀️'])
         
         # Joy/celebration themed
-        if any(word in text for word in ['joy', 'happy', 'celebration', 'dance', 'song', 'music', 'laugh']):
+        if has_word(['joy', 'happy', 'celebration', 'dance', 'song', 'music', 'laugh']):
             return random.choice(['🎉', '🎵', '💃', '🎭', '🎪'])
         
         # Love/heart themed
-        if any(word in text for word in ['love', 'heart', 'dear', 'sweet', 'beauty', 'beautiful']):
+        if has_word(['love', 'heart', 'dear', 'sweet', 'beauty', 'beautiful']):
             return random.choice(['💕', '💖', '💝', '❤️'])
         
         # Adventure/journey themed
-        if any(word in text for word in ['journey', 'road', 'path', 'travel', 'adventure', 'mountain']):
+        if has_word(['journey', 'road', 'path', 'travel', 'adventure', 'mountain']):
             return random.choice(['🗺️', '⛰️', '🚀', '🎯'])
         
         # Death/memorial themed
-        if any(word in text for word in ['death', 'die', 'grave', 'tomb', 'funeral', 'memory', 'farewell', 'goodbye']):
+        if has_word(['death', 'die', 'grave', 'tomb', 'funeral', 'memory', 'farewell', 'goodbye']):
             return random.choice(['🕯️', '⚰️', '🌹', '🙏', '😢'])
         
         # War/conflict themed
-        if any(word in text for word in ['war', 'battle', 'fight', 'soldier', 'sword', 'conflict', 'victory', 'defeat']):
+        if has_word(['war', 'battle', 'fight', 'soldier', 'sword', 'conflict', 'victory', 'defeat']):
             return random.choice(['⚔️', '🛡️', '🏺', '⚡', '🔥'])
         
         # Wisdom/philosophy themed
-        if any(word in text for word in ['wisdom', 'truth', 'knowledge', 'think', 'mind', 'soul', 'spirit', 'philosophy']):
+        if has_word(['wisdom', 'truth', 'knowledge', 'think', 'mind', 'soul', 'spirit', 'philosophy']):
             return random.choice(['🧠', '💭', '📚', '🔮', '⚖️'])
         
         # Animals/creatures themed
-        if any(word in text for word in ['bird', 'cat', 'dog', 'horse', 'lion', 'wolf', 'deer', 'rabbit', 'mouse']):
+        if has_word(['bird', 'cat', 'dog', 'horse', 'lion', 'wolf', 'deer', 'rabbit', 'mouse']):
             return random.choice(['🐦', '🦅', '🐺', '🦌', '🐰', '🐱', '🐴'])
         
         # Food/feast themed
-        if any(word in text for word in ['food', 'bread', 'wine', 'feast', 'drink', 'eat', 'hunger', 'fruit', 'apple']):
+        if has_word(['food', 'bread', 'wine', 'feast', 'drink', 'eat', 'hunger', 'fruit', 'apple']):
             return random.choice(['🍎', '🍞', '🍷', '🍯', '🥖', '🍇'])
         
         # Work/labor themed
-        if any(word in text for word in ['work', 'labor', 'toil', 'craft', 'build', 'create', 'make', 'forge', 'tool']):
+        if has_word(['work', 'labor', 'toil', 'craft', 'build', 'create', 'make', 'forge', 'tool']):
             return random.choice(['🔨', '⚙️', '🛠️', '👷', '🏗️', '⚒️'])
         
         # Fire/heat themed
-        if any(word in text for word in ['fire', 'flame', 'burn', 'hot', 'heat', 'warm', 'ember', 'blaze', 'light']):
+        if has_word(['fire', 'flame', 'burn', 'hot', 'heat', 'warm', 'ember', 'blaze', 'light']):
             return random.choice(['🔥', '🕯️', '💡', '🌋', '☄️', '✨'])
         
         # Cold/winter themed
-        if any(word in text for word in ['cold', 'ice', 'snow', 'winter', 'frost', 'freeze', 'chill', 'frozen']):
+        if has_word(['cold', 'ice', 'snow', 'winter', 'frost', 'freeze', 'chill', 'frozen']):
             return random.choice(['❄️', '🧊', '🌨️', '⛄', '🥶', '🌬️'])
         
         # Time/age themed
-        if any(word in text for word in ['time', 'age', 'old', 'young', 'past', 'future', 'year', 'hour', 'clock']):
+        if has_word(['time', 'age', 'old', 'young', 'past', 'future', 'year', 'hour', 'clock']):
             return random.choice(['⏰', '⌛', '🕐', '📅', '⏳', '🔄'])
         
         # Magic/mystery themed
-        if any(word in text for word in ['magic', 'spell', 'witch', 'mystery', 'secret', 'enchant', 'curse', 'fortune']):
+        if has_word(['magic', 'spell', 'witch', 'mystery', 'secret', 'enchant', 'curse', 'fortune']):
             return random.choice(['🔮', '✨', '🎩', '🃏', '🌟', '🪄'])
         
         # Default water-related emoji for hydration context
