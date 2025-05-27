@@ -13,8 +13,8 @@ import pytz
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from ..database.models import DatabaseManager
-from ..content.manager import ContentManager
+from src.database.models import DatabaseManager
+from src.content.manager import ContentManager
 
 logger = logging.getLogger(__name__)
 
