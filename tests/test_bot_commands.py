@@ -292,3 +292,180 @@ class TestNextReminderCalculation:
         result = await hippo_bot._calculate_next_reminder_time(user_data)
         assert result is not None
         assert "in 1 minute" in result
+
+    @pytest.mark.asyncio
+    async def test_custom_hours_command_new_user(self, hippo_bot, mock_update, mock_context):
+        """Test /custom_hours command for new user."""
+        user_id = mock_update.effective_user.id
+        mock_update.message.reply_text = AsyncMock()
+        
+        await hippo_bot.custom_hours_command(mock_update, mock_context)
+        
+        # Should ask user to run /start first
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        assert "Please use /start first" in args[0]
+
+    @pytest.mark.asyncio
+    async def test_custom_hours_command_existing_user(self, hippo_bot, mock_update, mock_context):
+        """Test /custom_hours command for existing user."""
+        user_id = mock_update.effective_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_update.message.reply_text = AsyncMock()
+        
+        await hippo_bot.custom_hours_command(mock_update, mock_context)
+        
+        # Should show custom hours setup interface
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        assert "Custom Waking Hours Setup" in args[0]
+        assert "Current hours:" in args[0]
+        assert kwargs['parse_mode'] == 'Markdown'
+        assert 'reply_markup' in kwargs
+
+    @pytest.mark.asyncio  
+    async def test_custom_hours_start_callback(self, hippo_bot, mock_callback_query, mock_context):
+        """Test custom hours start callback."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "custom_hours_start"
+        
+        await hippo_bot._handle_custom_hours_callback(mock_callback_query)
+        
+        # Should show start time selection
+        mock_callback_query.edit_message_text.assert_called_once()
+        args, kwargs = mock_callback_query.edit_message_text.call_args
+        assert "Step 1: Choose Start Hour" in args[0]
+
+    @pytest.mark.asyncio
+    async def test_custom_hours_cancel_callback(self, hippo_bot, mock_callback_query, mock_context):
+        """Test custom hours cancel callback."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "custom_hours_cancel"
+        
+        await hippo_bot._handle_custom_hours_callback(mock_callback_query)
+        
+        # Should show cancellation message
+        mock_callback_query.edit_message_text.assert_called_once()
+        args, kwargs = mock_callback_query.edit_message_text.call_args
+        assert "Custom Hours Setup Cancelled" in args[0]
+
+    @pytest.mark.asyncio
+    async def test_start_hour_selection(self, hippo_bot, mock_callback_query, mock_context):
+        """Test start hour selection callback."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "start_hour_8"
+        
+        await hippo_bot._handle_start_hour_selection(mock_callback_query)
+        
+        # Should show minute selection for hour 8
+        mock_callback_query.edit_message_text.assert_called_once()
+        args, kwargs = mock_callback_query.edit_message_text.call_args
+        assert "Step 1: Choose Start Minute" in args[0]
+        assert "Start hour: **08:xx**" in args[0]
+
+    @pytest.mark.asyncio
+    async def test_start_time_selection(self, hippo_bot, mock_callback_query, mock_context):
+        """Test start time (hour and minute) selection callback."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "start_time_8_30"
+        
+        await hippo_bot._handle_start_time_selection(mock_callback_query)
+        
+        # Should show end hour selection
+        mock_callback_query.edit_message_text.assert_called_once()
+        args, kwargs = mock_callback_query.edit_message_text.call_args
+        assert "Step 2: Choose End Hour" in args[0]
+        assert "Start time: **08:30**" in args[0]
+
+    @pytest.mark.asyncio
+    async def test_end_hour_selection(self, hippo_bot, mock_callback_query, mock_context):
+        """Test end hour selection callback."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "end_hour_8_30_22"
+        
+        await hippo_bot._handle_end_hour_selection(mock_callback_query)
+        
+        # Should show minute selection for end hour 22
+        mock_callback_query.edit_message_text.assert_called_once()
+        args, kwargs = mock_callback_query.edit_message_text.call_args
+        assert "Step 2: Choose End Minute" in args[0]
+        assert "Start time: **08:30**" in args[0]
+        assert "End hour: **22:xx**" in args[0]
+
+    @pytest.mark.asyncio
+    async def test_complete_custom_hours_setup_normal_schedule(self, hippo_bot, mock_callback_query, mock_context):
+        """Test completing custom hours setup with normal schedule."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "end_time_8_30_22_15"
+        
+        await hippo_bot._handle_end_time_selection(mock_callback_query)
+        
+        # Verify waking hours were updated in database
+        user = await hippo_bot.database.get_user(user_id)
+        assert user['waking_start_hour'] == 8
+        assert user['waking_start_minute'] == 30
+        assert user['waking_end_hour'] == 22  
+        assert user['waking_end_minute'] == 15
+        
+        # Should show success message
+        mock_callback_query.edit_message_text.assert_called_once()
+        args, kwargs = mock_callback_query.edit_message_text.call_args
+        assert "Custom Hours Set Successfully!" in args[0]
+        assert "Start: 08:30" in args[0]
+        assert "End: 22:15" in args[0]
+        assert "regular schedule" in args[0]
+
+    @pytest.mark.asyncio
+    async def test_complete_custom_hours_setup_overnight_schedule(self, hippo_bot, mock_callback_query, mock_context):
+        """Test completing custom hours setup with overnight schedule."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "end_time_22_45_6_15"
+        
+        await hippo_bot._handle_end_time_selection(mock_callback_query)
+        
+        # Verify waking hours were updated in database  
+        user = await hippo_bot.database.get_user(user_id)
+        assert user['waking_start_hour'] == 22
+        assert user['waking_start_minute'] == 45
+        assert user['waking_end_hour'] == 6
+        assert user['waking_end_minute'] == 15
+        
+        # Should show success message with overnight detection
+        mock_callback_query.edit_message_text.assert_called_once()
+        args, kwargs = mock_callback_query.edit_message_text.call_args
+        assert "Custom Hours Set Successfully!" in args[0]
+        assert "Start: 22:45" in args[0]
+        assert "End: 06:15" in args[0]
+        assert "overnight schedule" in args[0]
+        assert "Overnight schedule detected!" in args[0]
+
+    @pytest.mark.asyncio
+    async def test_complete_custom_hours_setup_invalid_time(self, hippo_bot, mock_callback_query, mock_context):
+        """Test completing custom hours setup with invalid time (same start and end)."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "end_time_8_30_8_30"
+        
+        await hippo_bot._handle_end_time_selection(mock_callback_query)
+        
+        # Should show error message for invalid time range
+        mock_callback_query.edit_message_text.assert_called_once()
+        args, kwargs = mock_callback_query.edit_message_text.call_args
+        assert "Invalid Time Range" in args[0]
+        assert "Start and end times cannot be the same" in args[0]

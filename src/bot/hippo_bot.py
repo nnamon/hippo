@@ -93,6 +93,7 @@ class HippoBot:
                 BotCommand("start", "Start the bot and check setup"),
                 BotCommand("setup", "Configure reminder preferences"),
                 BotCommand("stats", "View your hydration statistics"),
+                BotCommand("poem", "Get a random water reminder poem"),
                 BotCommand("reset", "Delete all your data and start fresh"),
                 BotCommand("help", "Show help and available commands")
             ]
@@ -197,7 +198,7 @@ class HippoBot:
 
 I'll send you friendly reminders to drink water with cute cartoons and poems during your waking hours!
         """
-        await update.message.reply_text(help_text, parse_mode='Markdown')
+        await update.message.reply_text(help_text)
     
     async def setup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /setup command."""
@@ -252,11 +253,15 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             "🤩 Perfect hydration - You're amazing!"
         ]
         
+        # Calculate next reminder time
+        next_reminder_text = await self._calculate_next_reminder_text(user_id)
+        
         stats_text = f"📊 *Your Hydration Stats (Last 7 Days)*\n\n"
         stats_text += f"💧 Water confirmations: {stats['confirmed']}\n"
         stats_text += f"❌ Missed reminders: {stats['missed']}\n"
         stats_text += f"📈 Success rate: {success_rate:.1f}%\n\n"
-        stats_text += f"Current hydration level:\n{level_descriptions[hydration_level]}"
+        stats_text += f"Current hydration level:\n{level_descriptions[hydration_level]}\n\n"
+        stats_text += f"⏰ {next_reminder_text}"
         
         await update.message.reply_text(stats_text, parse_mode='Markdown')
     
@@ -363,6 +368,18 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             await self._handle_timezone_selection(query)
         elif query.data.startswith("theme_"):
             await self._handle_theme_selection(query)
+        elif query.data.startswith("custom_hours_"):
+            await self._handle_custom_hours_callback(query)
+        elif query.data.startswith("start_hour_"):
+            await self._handle_start_hour_selection(query)
+        elif query.data.startswith("start_time_"):
+            await self._handle_start_time_selection(query)
+        elif query.data.startswith("end_hour_"):
+            await self._handle_end_hour_selection(query)
+        elif query.data.startswith("end_time_"):
+            await self._handle_end_time_selection(query)
+        elif query.data == "stats":
+            await self._handle_stats_callback(query)
         else:
             await query.edit_message_text("Unknown button action")
     
@@ -689,9 +706,8 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         completion_text += f"• Theme: {theme_display}\n\n"
         
         # Calculate next reminder time
-        next_reminder_time = await self._calculate_next_reminder_time(user_data)
-        if next_reminder_time:
-            completion_text += f"⏰ **Next reminder:** {next_reminder_time}\n\n"
+        next_reminder_text = await self._calculate_next_reminder_text(user_id)
+        completion_text += f"⏰ **{next_reminder_text}**\n\n"
         
         completion_text += "I'll start sending you water reminders during your waking hours! 🦛💧\n\n"
         completion_text += "Use /help to see all available commands."
@@ -707,13 +723,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         selection = query.data.replace("waking_", "")
         
         if selection == "custom":
-            await query.edit_message_text(
-                "🔧 Custom hours setup coming soon!\n\n"
-                "For now, please choose one of the preset options.",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("⬅️ Back", callback_data="setup_waking_hours")
-                ]])
-            )
+            await self._start_custom_hours_setup(query)
             return
         elif selection == "back":
             # Return to main setup menu
@@ -896,7 +906,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
                     "• All settings and preferences removed\n"
                     "• Hydration history cleared\n"
                     "• Reminders stopped\n\n"
-                    "Run `/start` to begin fresh! 🦛",
+                    "Run /start to begin fresh! 🦛",
                     parse_mode='Markdown'
                 )
             else:
@@ -921,6 +931,382 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             "Use `/help` to see what else I can do for you! 🦛"
         )
         
+
+    async def _start_custom_hours_setup(self, query):
+        """Start the custom hours setup process."""
+        await self._setup_start_time(query)
+
+    async def _setup_start_time(self, query):
+        """Setup start time selection."""
+        keyboard = []
+        
+        # Create hour selection buttons (0-23)
+        for row in range(6):  # 6 rows of 4 buttons each
+            hour_row = []
+            for col in range(4):
+                hour = row * 4 + col
+                if hour < 24:
+                    hour_row.append(InlineKeyboardButton(
+                        f"{hour:02d}:xx", 
+                        callback_data=f"start_hour_{hour}"
+                    ))
+            if hour_row:
+                keyboard.append(hour_row)
+        
+        keyboard.append([InlineKeyboardButton("⬅️ Back", callback_data="setup_waking_hours")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        text = "🌅 *Step 1: Choose Start Hour*\n\n"
+        text += "When do you want to START receiving reminders?\n"
+        text += "Select the hour (you'll choose minutes next):"
+        
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=reply_markup)
+
+    async def _setup_start_minute(self, query, hour):
+        """Setup start minute selection."""
+        keyboard = [
+            [
+                InlineKeyboardButton(f"{hour:02d}:00", callback_data=f"start_time_{hour}_0"),
+                InlineKeyboardButton(f"{hour:02d}:15", callback_data=f"start_time_{hour}_15")
+            ],
+            [
+                InlineKeyboardButton(f"{hour:02d}:30", callback_data=f"start_time_{hour}_30"),
+                InlineKeyboardButton(f"{hour:02d}:45", callback_data=f"start_time_{hour}_45")
+            ],
+            [InlineKeyboardButton("⬅️ Back to Hours", callback_data="custom_hours_start")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        text = f"🕐 *Step 1: Choose Start Minute*\n\n"
+        text += f"Start hour: **{hour:02d}:xx**\n\n"
+        text += "Select the exact start time:"
+        
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=reply_markup)
+
+    async def _setup_end_time(self, query, start_hour, start_minute):
+        """Setup end time selection."""
+        keyboard = []
+        
+        # Create hour selection buttons (0-23)
+        for row in range(6):  # 6 rows of 4 buttons each
+            hour_row = []
+            for col in range(4):
+                hour = row * 4 + col
+                if hour < 24:
+                    hour_row.append(InlineKeyboardButton(
+                        f"{hour:02d}:xx", 
+                        callback_data=f"end_hour_{start_hour}_{start_minute}_{hour}"
+                    ))
+            if hour_row:
+                keyboard.append(hour_row)
+        
+        keyboard.append([InlineKeyboardButton("⬅️ Back to Start Time", callback_data="custom_hours_start")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        text = f"🌙 *Step 2: Choose End Hour*\n\n"
+        text += f"Start time: **{start_hour:02d}:{start_minute:02d}**\n\n"
+        text += "When do you want to STOP receiving reminders?\n"
+        text += "Select the hour (you'll choose minutes next):"
+        
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=reply_markup)
+
+    async def _setup_end_minute(self, query, start_hour, start_minute, end_hour):
+        """Setup end minute selection."""
+        keyboard = [
+            [
+                InlineKeyboardButton(f"{end_hour:02d}:00", callback_data=f"end_time_{start_hour}_{start_minute}_{end_hour}_0"),
+                InlineKeyboardButton(f"{end_hour:02d}:15", callback_data=f"end_time_{start_hour}_{start_minute}_{end_hour}_15")
+            ],
+            [
+                InlineKeyboardButton(f"{end_hour:02d}:30", callback_data=f"end_time_{start_hour}_{start_minute}_{end_hour}_30"),
+                InlineKeyboardButton(f"{end_hour:02d}:45", callback_data=f"end_time_{start_hour}_{start_minute}_{end_hour}_45")
+            ],
+            [InlineKeyboardButton("⬅️ Back to Hours", callback_data=f"end_hour_{start_hour}_{start_minute}_back")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        text = f"🕐 *Step 2: Choose End Minute*\n\n"
+        text += f"Start time: **{start_hour:02d}:{start_minute:02d}**\n"
+        text += f"End hour: **{end_hour:02d}:xx**\n\n"
+        text += "Select the exact end time:"
+        
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=reply_markup)
+
+    async def _complete_custom_hours_setup(self, query, start_hour, start_minute, end_hour, end_minute):
+        """Complete the custom hours setup."""
+        user_id = query.from_user.id
+        
+        # Validate times
+        if start_hour == end_hour and start_minute == end_minute:
+            await query.edit_message_text(
+                "❌ *Invalid Time Range*\n\n"
+                "Start and end times cannot be the same.\n"
+                "Please try again.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔄 Try Again", callback_data="custom_hours_start")
+                ]])
+            )
+            return
+        
+        # Save to database
+        success = await self.database.update_user_waking_hours(
+            user_id, start_hour, start_minute, end_hour, end_minute
+        )
+        
+        if success:
+            # Create time display
+            start_time = f"{start_hour:02d}:{start_minute:02d}"
+            end_time = f"{end_hour:02d}:{end_minute:02d}"
+            
+            # Check if it's overnight schedule
+            is_overnight = (start_hour > end_hour) or (start_hour == end_hour and start_minute > end_minute)
+            schedule_type = "overnight" if is_overnight else "regular"
+            
+            text = f"✅ *Custom Hours Set Successfully!*\n\n"
+            text += f"**Your new schedule:**\n"
+            text += f"🌅 Start: {start_time}\n"
+            text += f"🌙 End: {end_time}\n"
+            text += f"📅 Type: {schedule_type} schedule\n\n"
+            
+            if is_overnight:
+                text += "💡 *Overnight schedule detected!*\n"
+                text += f"Reminders from {start_time} until {end_time} next day.\n\n"
+            
+            text += "Your water reminders will now follow this custom schedule! 🦛💧"
+            
+            keyboard = [
+                [InlineKeyboardButton("⚙️ Back to Setup", callback_data="setup_back")],
+                [InlineKeyboardButton("📊 View Stats", callback_data="stats")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, parse_mode='Markdown', reply_markup=reply_markup)
+        else:
+            await query.edit_message_text(
+                "❌ *Error saving custom hours*\n\n"
+                "Please try again.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔄 Try Again", callback_data="custom_hours_start")
+                ]])
+            )
+
+    async def _handle_custom_hours_callback(self, query):
+        """Handle custom hours related callbacks."""
+        action = query.data.replace("custom_hours_", "")
+        
+        if action == "start":
+            await self._setup_start_time(query)
+        elif action == "cancel":
+            # Return to setup menu
+            await self._setup_waking_hours(query)
+
+    async def _handle_start_hour_selection(self, query):
+        """Handle start hour selection."""
+        hour = int(query.data.replace("start_hour_", ""))
+        await self._setup_start_minute(query, hour)
+
+    async def _handle_start_time_selection(self, query):
+        """Handle start time (hour and minute) selection."""
+        parts = query.data.replace("start_time_", "").split("_")
+        start_hour = int(parts[0])
+        start_minute = int(parts[1])
+        await self._setup_end_time(query, start_hour, start_minute)
+
+    async def _handle_end_hour_selection(self, query):
+        """Handle end hour selection."""
+        parts = query.data.replace("end_hour_", "").split("_")
+        
+        if parts[-1] == "back":
+            # Back button - return to end hour selection
+            start_hour = int(parts[0])
+            start_minute = int(parts[1])
+            await self._setup_end_time(query, start_hour, start_minute)
+        else:
+            # Regular end hour selection
+            start_hour = int(parts[0])
+            start_minute = int(parts[1])
+            end_hour = int(parts[2])
+            await self._setup_end_minute(query, start_hour, start_minute, end_hour)
+
+    async def _handle_end_time_selection(self, query):
+        """Handle end time (hour and minute) selection."""
+        parts = query.data.replace("end_time_", "").split("_")
+        start_hour = int(parts[0])
+        start_minute = int(parts[1])
+        end_hour = int(parts[2])
+        end_minute = int(parts[3])
+        await self._complete_custom_hours_setup(query, start_hour, start_minute, end_hour, end_minute)
+
+    async def _handle_stats_callback(self, query):
+        """Handle stats callback from inline button."""
+        user_id = query.from_user.id
+        
+        # Get user stats
+        stats = await self.database.get_user_hydration_stats(user_id, days=7)
+        
+        if not stats:
+            await query.edit_message_text("❌ No stats available yet. Start drinking water to see your progress!")
+            return
+        
+        # Calculate success rate
+        total_events = stats['confirmed'] + stats['missed']
+        if total_events > 0:
+            success_rate = (stats['confirmed'] / total_events) * 100
+        else:
+            success_rate = 0
+        
+        # Get current hydration level
+        hydration_level = await self.database.calculate_hydration_level(user_id)
+        
+        level_descriptions = {
+            0: "🏜️ Completely Dehydrated - Needs immediate water!",
+            1: "😵 Very Dehydrated - Multiple glasses needed",
+            2: "😰 Dehydrated - Time for some water",
+            3: "😊 Moderately Hydrated - Keep it up",
+            4: "😄 Well Hydrated - Great job!",
+            5: "🤩 Perfectly Hydrated - You're crushing it!"
+        }
+        
+        stats_text = f"📊 *Your Hydration Stats (Last 7 Days)*\n\n"
+        stats_text += f"💧 Water confirmations: {stats['confirmed']}\n"
+        stats_text += f"❌ Missed reminders: {stats['missed']}\n"
+        stats_text += f"📈 Success rate: {success_rate:.1f}%\n\n"
+        stats_text += f"Current hydration level:\n{level_descriptions[hydration_level]}"
+        
+        await query.edit_message_text(stats_text, parse_mode='Markdown')
+
+    async def _calculate_next_reminder_text(self, user_id: int) -> str:
+        """Calculate when the next reminder will be sent."""
+        try:
+            # Get user data
+            user_data = await self.database.get_user(user_id)
+            if not user_data or not user_data['is_active']:
+                return "Next reminder: User not active"
+            
+            # Get user's timezone
+            user_tz_str = user_data.get('timezone', 'Asia/Singapore')
+            try:
+                user_tz = pytz.timezone(user_tz_str)
+            except Exception:
+                user_tz = pytz.timezone('Asia/Singapore')
+            
+            # Get current time in user's timezone
+            now_utc = datetime.now(pytz.UTC)
+            now_local = now_utc.astimezone(user_tz)
+            
+            # Check if currently within waking hours
+            from src.bot.reminder_system import ReminderSystem
+            reminder_system = ReminderSystem(self.database, self.content_manager)
+            is_within_waking_hours = reminder_system._is_within_waking_hours(user_data)
+            
+            if not is_within_waking_hours:
+                # Calculate next waking time
+                next_wake_time = self._calculate_next_wake_time(user_data, now_local)
+                if next_wake_time:
+                    return f"Next reminder: {next_wake_time.strftime('%H:%M')} (when waking hours start)"
+                else:
+                    return "Next reminder: When waking hours start"
+            
+            # User is within waking hours, calculate next reminder based on interval
+            interval_minutes = user_data['reminder_interval_minutes']
+            
+            # Get last reminder time
+            async with self.database.connection.execute("""
+                SELECT MAX(last_reminder) as last_reminder FROM (
+                    SELECT MAX(created_at) as last_reminder
+                    FROM active_reminders 
+                    WHERE user_id = ?
+                    UNION ALL
+                    SELECT MAX(created_at) as last_reminder
+                    FROM hydration_events 
+                    WHERE user_id = ?
+                )
+            """, (user_id, user_id)) as cursor:
+                result = await cursor.fetchone()
+            
+            if not result or not result[0]:
+                # No previous reminders, next one should be soon
+                return "Next reminder: Within the next few minutes"
+            
+            last_reminder_time = datetime.fromisoformat(result[0])
+            next_reminder_time = last_reminder_time + timedelta(minutes=interval_minutes)
+            
+            # Convert to user's timezone for display
+            if next_reminder_time.tzinfo is None:
+                next_reminder_time = pytz.UTC.localize(next_reminder_time)
+            next_reminder_local = next_reminder_time.astimezone(user_tz)
+            
+            # Check if next reminder is still within waking hours today
+            if self._is_time_within_waking_hours(next_reminder_local.time(), user_data):
+                # Format relative time
+                time_diff = next_reminder_local - now_local
+                if time_diff.total_seconds() <= 0:
+                    return "Next reminder: Any moment now"
+                elif time_diff.total_seconds() < 3600:  # Less than 1 hour
+                    minutes = int(time_diff.total_seconds() / 60)
+                    return f"Next reminder: In {minutes} minute{'s' if minutes != 1 else ''}"
+                else:
+                    return f"Next reminder: {next_reminder_local.strftime('%H:%M')}"
+            else:
+                # Next reminder would be outside waking hours, so it's tomorrow
+                next_wake_time = self._calculate_next_wake_time(user_data, now_local)
+                if next_wake_time:
+                    return f"Next reminder: {next_wake_time.strftime('%H:%M')} (tomorrow)"
+                else:
+                    return "Next reminder: Tomorrow when waking hours start"
+                    
+        except Exception as e:
+            logger.error(f"Error calculating next reminder for user {user_id}: {e}")
+            return "Next reminder: Unable to calculate"
+    
+    def _calculate_next_wake_time(self, user_data: dict, current_time: datetime) -> Optional[datetime]:
+        """Calculate the next time waking hours start."""
+        try:
+            start_hour = user_data['waking_start_hour']
+            start_minute = user_data['waking_start_minute']
+            
+            # If 24/7 mode, return None
+            if start_hour == 0 and user_data['waking_end_hour'] == 23:
+                return None
+            
+            # Calculate next wake time (could be today or tomorrow)
+            today_wake = current_time.replace(
+                hour=start_hour, 
+                minute=start_minute, 
+                second=0, 
+                microsecond=0
+            )
+            
+            if today_wake > current_time:
+                return today_wake
+            else:
+                # Tomorrow
+                return today_wake + timedelta(days=1)
+                
+        except Exception as e:
+            logger.error(f"Error calculating next wake time: {e}")
+            return None
+    
+    def _is_time_within_waking_hours(self, check_time: time, user_data: dict) -> bool:
+        """Check if a specific time is within waking hours."""
+        start_hour = user_data['waking_start_hour']
+        end_hour = user_data['waking_end_hour']
+        start_minute = user_data['waking_start_minute']
+        end_minute = user_data['waking_end_minute']
+        
+        # 24/7 mode
+        if start_hour == 0 and end_hour == 23:
+            return True
+        
+        start_time = time(start_hour, start_minute)
+        end_time = time(end_hour, end_minute)
+        
+        # Handle overnight schedule
+        if start_time <= end_time:
+            return start_time <= check_time <= end_time
+        else:
+            return check_time >= start_time or check_time <= end_time
+
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular text messages."""
         await update.message.reply_text(
