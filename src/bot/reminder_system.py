@@ -194,7 +194,7 @@ class ReminderSystem:
             message_text += "Tap the button below when you've had some water! 🦛"
             
             # Send the message with image
-            image_path = Path("assets/images") / content['image']
+            image_path = Path("assets") / content['image']
             
             if image_path.exists():
                 # Send with image
