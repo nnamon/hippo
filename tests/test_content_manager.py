@@ -3,6 +3,8 @@ Tests for content manager functionality.
 """
 
 import pytest
+import asyncio
+from unittest.mock import patch, AsyncMock, Mock
 
 
 class TestContentManager:
@@ -10,38 +12,49 @@ class TestContentManager:
     
     def test_content_manager_initialization(self, content_manager):
         """Test content manager initializes correctly."""
-        assert len(content_manager.poems) == 30
+        assert len(content_manager.fallback_poems) == 30
         assert len(content_manager.themes) == 4
         assert isinstance(content_manager.confirmation_messages, dict)
         assert len(content_manager.recent_poems) == 0
+        assert len(content_manager.poem_cache) == 0
+        assert content_manager.cache_size == 20
+        assert content_manager.api_timeout == 5.0
     
-    def test_get_random_poem(self, content_manager):
-        """Test random poem selection."""
-        poem1 = content_manager.get_random_poem()
-        poem2 = content_manager.get_random_poem()
-        
-        assert poem1 in content_manager.poems
-        assert poem2 in content_manager.poems
-        assert len(content_manager.recent_poems) == 2
-        assert poem1 in content_manager.recent_poems
-        assert poem2 in content_manager.recent_poems
+    def test_get_random_poem_fallback(self, content_manager):
+        """Test random poem selection (fallback when API unavailable)."""
+        # Mock API failure to test fallback
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value.__aenter__.return_value.get.side_effect = Exception("API down")
+            
+            poem1 = content_manager.get_random_poem()
+            poem2 = content_manager.get_random_poem()
+            
+            assert poem1 in content_manager.fallback_poems
+            assert poem2 in content_manager.fallback_poems
+            assert len(content_manager.recent_poems) == 2
+            assert poem1 in content_manager.recent_poems
+            assert poem2 in content_manager.recent_poems
     
-    def test_poem_repetition_avoidance(self, content_manager):
-        """Test that recent poems are avoided."""
-        # Get half the poems to trigger reset
-        poems_gotten = []
-        for _ in range(15):  # Half of 30 poems
-            poem = content_manager.get_random_poem()
-            poems_gotten.append(poem)
-        
-        # All should be different
-        assert len(set(poems_gotten)) == 15
-        
-        # Get another poem to trigger reset
-        next_poem = content_manager.get_random_poem()
-        
-        # Recent poems list should be reduced to last 3
-        assert len(content_manager.recent_poems) == 4  # 3 + the new one
+    def test_poem_repetition_avoidance_fallback(self, content_manager):
+        """Test that recent poems are avoided in fallback mode."""
+        # Mock API failure to test fallback behavior
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value.__aenter__.return_value.get.side_effect = Exception("API down")
+            
+            # Get half the fallback poems to trigger reset
+            poems_gotten = []
+            for _ in range(15):  # Half of 30 fallback poems
+                poem = content_manager.get_random_poem()
+                poems_gotten.append(poem)
+            
+            # All should be different
+            assert len(set(poems_gotten)) == 15
+            
+            # Get another poem to trigger reset
+            next_poem = content_manager.get_random_poem()
+            
+            # Recent poems list should be reduced to last 3
+            assert len(content_manager.recent_poems) == 4  # 3 + the new one
     
     def test_get_available_themes(self, content_manager):
         """Test getting available themes."""
@@ -106,7 +119,7 @@ class TestContentManager:
         assert 'image' in content
         assert 'hydration_level' in content
         
-        assert content['poem'] in content_manager.poems
+        assert content['poem'] in content_manager.fallback_poems
         assert content['image'].startswith('spring/')
         assert content['hydration_level'] == 3
     
@@ -130,3 +143,142 @@ class TestContentManager:
         # Test with wrong number of images
         success = content_manager.add_theme('badtheme', ['only1.png'])
         assert success is False
+
+
+class TestDynamicPoemGeneration:
+    """Test dynamic poem generation functionality."""
+    
+    def test_emoji_classification_water_theme(self, content_manager):
+        """Test emoji classification for water-themed poems."""
+        emoji = content_manager._classify_poem_emoji(
+            "The River", "Test Author", 
+            ["Water flows down the stream", "Waves crash on the shore"]
+        )
+        assert emoji in ['💧', '🌊', '💦', '🏊']
+        
+    def test_emoji_classification_nature_theme(self, content_manager):
+        """Test emoji classification for nature-themed poems."""
+        emoji = content_manager._classify_poem_emoji(
+            "Spring Garden", "Test Author",
+            ["Roses bloom in the garden", "Trees grow tall and green"]
+        )
+        assert emoji in ['🌸', '🌺', '🌿', '🌱', '🌳', '🌷']
+        
+    def test_emoji_classification_death_theme(self, content_manager):
+        """Test emoji classification for death/memorial themed poems."""
+        emoji = content_manager._classify_poem_emoji(
+            "Funeral Elegy", "Test Author",
+            ["Death comes to all", "Farewell my friend"]
+        )
+        assert emoji in ['🕯️', '⚰️', '🌹', '🙏', '😢']
+        
+    def test_emoji_classification_war_theme(self, content_manager):
+        """Test emoji classification for war/conflict themed poems."""
+        emoji = content_manager._classify_poem_emoji(
+            "Battle Hymn", "Test Author",
+            ["Soldiers march to war", "Victory or defeat awaits"]
+        )
+        assert emoji in ['⚔️', '🛡️', '🏺', '⚡', '🔥']
+        
+    def test_emoji_classification_default(self, content_manager):
+        """Test emoji classification falls back to default."""
+        emoji = content_manager._classify_poem_emoji(
+            "Random Title", "Test Author",
+            ["Some random lines", "That don't match any category"]
+        )
+        assert emoji in ['💧', '🎭', '📜', '✨']
+        
+    @pytest.mark.asyncio
+    async def test_fetch_poems_from_api_success(self, content_manager):
+        """Test successful API fetch of poems."""
+        mock_response_data = [
+            {
+                "title": "Test Poem",
+                "author": "Test Author",
+                "lines": ["Line one", "Line two", "Line three", "Line four"],
+                "linecount": "4"
+            }
+        ]
+        
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_response = Mock()
+            mock_response.json.return_value = mock_response_data
+            mock_response.raise_for_status.return_value = None
+            mock_client.return_value.__aenter__.return_value.get.return_value = mock_response
+            
+            poems = await content_manager._fetch_poems_from_api(1)
+            
+            assert len(poems) == 1
+            assert "Test Poem" in poems[0]
+            assert "Test Author" in poems[0]
+            assert "Line one" in poems[0]
+            assert poems[0].startswith(('💧', '🌊', '💦', '🏊', '🌸', '🌺', '🌿', '🌱', '🌳', '🌷', '🌙', '🌟', '🌅', '⭐', '☀️', '🎉', '🎵', '💃', '🎭', '🎪', '💕', '💖', '💝', '❤️', '🗺️', '⛰️', '🚀', '🎯', '🕯️', '⚰️', '🌹', '🙏', '😢', '⚔️', '🛡️', '🏺', '⚡', '🔥', '🧠', '💭', '📚', '🔮', '⚖️', '🐦', '🦅', '🐺', '🦌', '🐰', '🐱', '🐴', '🍎', '🍞', '🍷', '🍯', '🥖', '🍇', '🔨', '⚙️', '🛠️', '👷', '🏗️', '⚒️', '❄️', '🧊', '🌨️', '⛄', '🥶', '🌬️', '⏰', '⌛', '🕐', '📅', '⏳', '🔄', '📜', '✨'))
+            
+    @pytest.mark.asyncio
+    async def test_fetch_poems_from_api_failure(self, content_manager):
+        """Test API fetch failure handling."""
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value.__aenter__.return_value.get.side_effect = Exception("API Error")
+            
+            poems = await content_manager._fetch_poems_from_api(1)
+            assert poems == []
+            
+    @pytest.mark.asyncio
+    async def test_replenish_poem_cache(self, content_manager):
+        """Test poem cache replenishment."""
+        mock_response_data = [
+            {
+                "title": f"Test Poem {i}",
+                "author": "Test Author",
+                "lines": ["Line one", "Line two", "Line three", "Line four"],
+                "linecount": "4"
+            } for i in range(5)
+        ]
+        
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_response = Mock()
+            mock_response.json.return_value = mock_response_data
+            mock_response.raise_for_status.return_value = None
+            mock_client.return_value.__aenter__.return_value.get.return_value = mock_response
+            
+            # Cache should be empty initially
+            assert len(content_manager.poem_cache) == 0
+            
+            # Replenish cache
+            await content_manager._replenish_poem_cache()
+            
+            # Cache should now have poems
+            assert len(content_manager.poem_cache) == 5
+            
+    @pytest.mark.asyncio
+    async def test_get_random_poem_async_with_cache(self, content_manager):
+        """Test async poem retrieval with cache."""
+        # Pre-populate cache
+        content_manager.poem_cache = ["🎭 *Cached Poem*\n\nTest poem content\n\n— _Test Author_"]
+        
+        poem = await content_manager.get_random_poem_async()
+        
+        assert "Cached Poem" in poem
+        # Cache should be replenished since it became empty (0 < 5 threshold)
+        assert len(content_manager.poem_cache) > 0
+        
+    @pytest.mark.asyncio
+    async def test_get_random_poem_async_fallback(self, content_manager):
+        """Test async poem retrieval falls back to hardcoded poems."""
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value.__aenter__.return_value.get.side_effect = Exception("API Error")
+            
+            poem = await content_manager.get_random_poem_async()
+            
+            # Should get a fallback poem
+            assert poem in content_manager.fallback_poems
+            
+    def test_get_random_poem_sync_wrapper(self, content_manager):
+        """Test sync wrapper for poem retrieval."""
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value.__aenter__.return_value.get.side_effect = Exception("API Error")
+            
+            poem = content_manager.get_random_poem()
+            
+            # Should get a fallback poem
+            assert poem in content_manager.fallback_poems

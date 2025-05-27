@@ -39,97 +39,84 @@ python main.py
 
 ## Testing Infrastructure
 
-The project uses a comprehensive testing paradigm with multiple layers:
+The project uses a comprehensive testing system with **Docker-based containers** for consistent environments across local development and CI/CD:
 
 ### Test Execution Methods
 
-**Local Testing (Recommended):**
+**All testing is done in Docker containers to ensure consistent environments between local development and CI/CD:**
+
 ```bash
-# Run all tests with coverage
-python run_tests.py --all
-
-# Run specific test categories
-python run_tests.py --unit            # Unit tests only
-python run_tests.py --coverage        # With coverage reports
-python run_tests.py --security        # Security scans
-python run_tests.py --integration     # Integration tests
-
-# Detailed coverage analysis
-python coverage_analysis.py
-```
-
-**Docker Testing (Production Environment):**
-```bash
-# Build and run tests in Docker (matches GitHub Actions)
+# Build test container with all dependencies
 docker build -f Dockerfile.test -t hippo-test .
+
+# Run all unit tests with coverage (64 tests)
 docker run --rm hippo-test
+
+# Run integration tests (5 component tests)  
+docker run --rm hippo-test python scripts/integration_test.py
 
 # Test production Docker build
 docker build -t hippo-bot:test .
+docker run --rm hippo-bot:test python -c "from bot.hippo_bot import HippoBot; print('✅ Production build works')"
+
+# Alternative: Use test runner script (also uses Docker internally)
+./scripts/run_tests.sh
 ```
 
-**Direct pytest (Quick Testing):**
-```bash
-# Simple test run
-pytest tests/ -v
+### Test Coverage Status
 
-# With coverage
-pytest tests/ --cov=src --cov-report=html
-```
-
-### Test Coverage Requirements
-
-- **Minimum Coverage**: 55% overall (current baseline)
-- **Goal Coverage**: 80% overall
-- **Per-File Target**: 70% minimum
-- **Branch Coverage**: Enabled and tracked
-- **Current Status**: 58.5% overall, 82% branch coverage
+- **Current Coverage**: 62.6% overall
+- **Minimum Required**: 55% (CI enforced)
+- **Target Coverage**: 80% overall
+- **Coverage Tracking**: XML, HTML, JSON reports + Codecov integration
+- **Total Tests**: 64 unit tests + 5 integration tests
 
 ### Test Categories
 
-1. **Unit Tests** (`tests/test_*.py`):
-   - 52 comprehensive tests covering all major components
-   - Database operations and hydration tracking
-   - Bot command handlers and callback queries
-   - Content management and theme selection
-   - Reminder system scheduling and validation
+1. **Unit Tests** (`tests/test_*.py`) - **64 tests total**:
+   - **Bot Commands** (15 tests): Command handlers, callbacks, next reminder calculations
+   - **Content Manager** (11 + 11 dynamic tests): Poem generation, themes, emoji classification
+   - **Database** (12 tests): User management, hydration tracking, data persistence  
+   - **Reminder System** (15 tests): Scheduling, timezone handling, waking hours
 
-2. **Integration Tests**:
-   - Full bot initialization and component interaction
-   - Database + Content Manager + Reminder System integration
-   - Async fixture management and proper teardown
+2. **Integration Tests** (`scripts/integration_test.py`) - **5 tests**:
+   - **Bot Imports**: Verify all components import successfully
+   - **Database Integration**: End-to-end database operations
+   - **Content Manager Integration**: Poem/theme functionality
+   - **Reminder System Integration**: Component interaction testing
+   - **Dynamic Poem Generation**: API integration and caching
 
-3. **Docker Tests**:
-   - Production environment simulation
-   - Containerized test execution
-   - Docker image build validation
+3. **Container Tests**:
+   - **Test Container**: Dockerfile.test with pytest + pytest-cov + pytest-asyncio
+   - **Production Container**: Full bot build verification
+   - **Import Validation**: Ensure all production imports work
 
-4. **Security Tests**:
-   - Bandit security scanning
-   - Dependency vulnerability checks (Safety)
-   - Code quality analysis
+4. **Security Tests** (CI only):
+   - **Bandit**: Python security linter for code vulnerabilities
+   - **Safety**: Dependency vulnerability scanning
+   - **Code Quality**: Flake8 linting with error tolerance
 
 ### GitHub Actions CI/CD Pipeline
 
-The project uses automated testing via GitHub Actions with two main workflows:
+**Single Comprehensive Workflow** (`.github/workflows/test.yml`)
 
-#### **Main Test Workflow** (`.github/workflows/test.yml`)
 **Triggers**: Pushes to `main`/`develop`, PRs, manual dispatch
 
 **Jobs**:
-- **🧪 Unit Tests**: 52 tests with 55% coverage threshold, uploads to Codecov
-- **🐳 Docker Tests**: Containerized testing matching production environment  
-- **🔒 Security Scans**: Bandit + Safety vulnerability checks
-- **🔗 Integration**: Full component interaction testing
-- **📊 Coverage Comments**: Automatic PR comments with coverage details
-- **📋 Summary**: Final status summary and artifact management
+1. **🧪 Unit Tests**: Python environment with pytest + coverage (55% minimum)
+2. **🐳 Docker Tests**: 
+   - Build test container (Dockerfile.test)
+   - Run unit tests in container environment  
+   - Run integration tests in container
+   - Validate production Docker build
+3. **🔒 Security**: Bandit + Safety scans (continue-on-error)
+4. **📊 Summary**: Combined results with pass/fail status
 
-#### **PR Checks Workflow** (`.github/workflows/pr-checks.yml`)
-**Triggers**: PRs to `main` only
-
-**Jobs**:
-- **⚡ Quick Tests**: Fast feedback (lint + unit tests with fail-fast)
-- **✅ Auto-Validation**: Marks PR readiness based on test results
+**Key Features**:
+- **Coverage Reporting**: Codecov integration with PR comments
+- **Artifact Management**: 30-day retention of coverage reports
+- **Container-First**: Docker tests match production environment exactly
+- **Fail-Fast**: Unit tests must pass before Docker tests run
 
 ### Coverage Reporting
 
@@ -171,6 +158,8 @@ tests/                      # Comprehensive test suite
 ├── test_database.py       # Database operations tests
 └── test_reminder_system.py # Reminder scheduling tests
 scripts/
+├── integration_test.py        # Integration test suite 
+├── run_tests.sh              # Main test runner script (Docker-based)
 └── generate_coverage_comment.py # Coverage PR comment generator
 .github/workflows/          # CI/CD automation
 ├── test.yml               # Main testing workflow
@@ -181,8 +170,6 @@ assets/
 ├── desert/                # Alternative theme assets
 ├── spring/                # Alternative theme assets
 └── vivid/                 # Alternative theme assets
-coverage_analysis.py       # Detailed coverage analysis tool
-run_tests.py               # Unified test runner script
 requirements-test.txt      # Testing dependencies
 pytest.ini                 # Pytest configuration
 .coveragerc                # Coverage analysis configuration
@@ -204,7 +191,7 @@ COVERAGE.md                # Coverage documentation and guidelines
 1. **Create feature branch**: `git checkout -b feature/description-of-work`
 2. **Implement changes** on the feature branch
 3. **Write/update tests**: Add tests for new functionality or bug fixes
-4. **Run local tests**: `python run_tests.py --all` to verify everything works
+4. **Run Docker tests**: `./scripts/run_tests.sh` to verify everything works
 5. **Test functionality**: Test the bot implementation manually as appropriate
 6. **Commit changes** to feature branch with descriptive messages
 7. **Push branch**: `git push -u origin feature/branch-name`
@@ -228,15 +215,15 @@ COVERAGE.md                # Coverage documentation and guidelines
 - Write tests for new features alongside implementation
 - Use existing test patterns in `tests/` directory as templates
 - Ensure new code maintains or improves overall coverage
-- Run tests locally before pushing: `python run_tests.py --coverage`
+- Run tests locally before pushing: `./scripts/run_tests.sh`
 
 #### Debugging Failed Tests
 **When GitHub Actions fail**:
 1. **Check the PR comment**: Automatic coverage analysis identifies issues
-2. **Run tests locally**: `python run_tests.py --all` to reproduce issues
+2. **Run tests locally**: `./scripts/run_tests.sh` to reproduce issues
 3. **View detailed logs**: Use `gh run view --log-failed` for GitHub Actions logs
 4. **Test in Docker**: `docker run --rm hippo-test` to match CI environment
-5. **Check coverage**: Use `python coverage_analysis.py` for detailed analysis
+5. **Test specific components**: `./scripts/run_tests.sh --unit` or `./scripts/run_tests.sh --integration`
 
 ### Branch Naming Convention
 - `feature/` - New features or enhancements

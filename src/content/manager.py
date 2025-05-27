@@ -3,8 +3,11 @@ Content manager for Hippo bot - handles poems, images, and themes.
 """
 
 import random
-from typing import List, Dict, Any
+import asyncio
+import logging
+from typing import List, Dict, Any, Optional
 from pathlib import Path
+import httpx
 
 
 class ContentManager:
@@ -13,9 +16,16 @@ class ContentManager:
     def __init__(self):
         """Initialize the content manager."""
         self.themes = self._load_themes()
-        self.poems = self._load_poems()
+        self.fallback_poems = self._load_poems()  # Renamed for clarity
         self.confirmation_messages = self._load_confirmation_messages()
         self.recent_poems = []  # Track recently used poems to avoid repetition
+        
+        # Dynamic poem system
+        self.poem_cache = []  # Cache of fetched poems from PoetryDB
+        self.cache_size = 20  # Number of poems to keep in cache
+        self.poetrydb_url = "https://poetrydb.org/random,linecount/{};4"
+        self.api_timeout = 5.0  # 5 second timeout for API calls
+        self.logger = logging.getLogger(__name__)
     
     def _load_themes(self) -> Dict[str, List[str]]:
         """Load image themes configuration."""
@@ -145,18 +155,156 @@ class ContentManager:
             ]
         }
     
-    def get_random_poem(self) -> str:
-        """Get a random hydration poem, avoiding recent repeats."""
+    def _classify_poem_emoji(self, title: str, author: str, lines: List[str]) -> str:
+        """Classify a poem and return an appropriate emoji based on keywords."""
+        import re
+        text = f"{title} {author} {' '.join(lines)}".lower()
+        
+        def has_word(word_list):
+            """Check if any whole words from word_list are in text."""
+            for word in word_list:
+                if re.search(r'\b' + re.escape(word) + r'\b', text):
+                    return True
+            return False
+        
+        # Water/hydration themed emojis (most relevant)
+        if has_word(['water', 'river', 'ocean', 'sea', 'rain', 'drop', 'flow', 'stream', 'wave']):
+            return random.choice(['💧', '🌊', '💦', '🏊'])
+        
+        # Nature themed
+        if has_word(['flower', 'rose', 'tree', 'garden', 'leaf', 'bloom', 'spring', 'nature']):
+            return random.choice(['🌸', '🌺', '🌿', '🌱', '🌳', '🌷'])
+        
+        # Celestial/time themed  
+        if has_word(['moon', 'star', 'sun', 'night', 'dawn', 'morning', 'evening']):
+            return random.choice(['🌙', '🌟', '🌅', '⭐', '☀️'])
+        
+        # Joy/celebration themed
+        if has_word(['joy', 'happy', 'celebration', 'dance', 'song', 'music', 'laugh']):
+            return random.choice(['🎉', '🎵', '💃', '🎭', '🎪'])
+        
+        # Love/heart themed
+        if has_word(['love', 'heart', 'dear', 'sweet', 'beauty', 'beautiful']):
+            return random.choice(['💕', '💖', '💝', '❤️'])
+        
+        # Adventure/journey themed
+        if has_word(['journey', 'road', 'path', 'travel', 'adventure', 'mountain']):
+            return random.choice(['🗺️', '⛰️', '🚀', '🎯'])
+        
+        # Death/memorial themed
+        if has_word(['death', 'die', 'grave', 'tomb', 'funeral', 'memory', 'farewell', 'goodbye']):
+            return random.choice(['🕯️', '⚰️', '🌹', '🙏', '😢'])
+        
+        # War/conflict themed
+        if has_word(['war', 'battle', 'fight', 'soldier', 'sword', 'conflict', 'victory', 'defeat']):
+            return random.choice(['⚔️', '🛡️', '🏺', '⚡', '🔥'])
+        
+        # Wisdom/philosophy themed
+        if has_word(['wisdom', 'truth', 'knowledge', 'think', 'mind', 'soul', 'spirit', 'philosophy']):
+            return random.choice(['🧠', '💭', '📚', '🔮', '⚖️'])
+        
+        # Animals/creatures themed
+        if has_word(['bird', 'cat', 'dog', 'horse', 'lion', 'wolf', 'deer', 'rabbit', 'mouse']):
+            return random.choice(['🐦', '🦅', '🐺', '🦌', '🐰', '🐱', '🐴'])
+        
+        # Food/feast themed
+        if has_word(['food', 'bread', 'wine', 'feast', 'drink', 'eat', 'hunger', 'fruit', 'apple']):
+            return random.choice(['🍎', '🍞', '🍷', '🍯', '🥖', '🍇'])
+        
+        # Work/labor themed
+        if has_word(['work', 'labor', 'toil', 'craft', 'build', 'create', 'make', 'forge', 'tool']):
+            return random.choice(['🔨', '⚙️', '🛠️', '👷', '🏗️', '⚒️'])
+        
+        # Fire/heat themed
+        if has_word(['fire', 'flame', 'burn', 'hot', 'heat', 'warm', 'ember', 'blaze', 'light']):
+            return random.choice(['🔥', '🕯️', '💡', '🌋', '☄️', '✨'])
+        
+        # Cold/winter themed
+        if has_word(['cold', 'ice', 'snow', 'winter', 'frost', 'freeze', 'chill', 'frozen']):
+            return random.choice(['❄️', '🧊', '🌨️', '⛄', '🥶', '🌬️'])
+        
+        # Time/age themed
+        if has_word(['time', 'age', 'old', 'young', 'past', 'future', 'year', 'hour', 'clock']):
+            return random.choice(['⏰', '⌛', '🕐', '📅', '⏳', '🔄'])
+        
+        # Magic/mystery themed
+        if has_word(['magic', 'spell', 'witch', 'mystery', 'secret', 'enchant', 'curse', 'fortune']):
+            return random.choice(['🔮', '✨', '🎩', '🃏', '🌟', '🪄'])
+        
+        # Default water-related emoji for hydration context
+        return random.choice(['💧', '🎭', '📜', '✨'])
+    
+    async def _fetch_poems_from_api(self, count: int = 5) -> List[Dict[str, Any]]:
+        """Fetch poems from PoetryDB API."""
+        try:
+            url = self.poetrydb_url.format(count)
+            async with httpx.AsyncClient(timeout=self.api_timeout) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                
+                poems_data = response.json()
+                formatted_poems = []
+                
+                for poem_data in poems_data:
+                    if poem_data.get('title') and poem_data.get('author') and poem_data.get('lines'):
+                        emoji = self._classify_poem_emoji(
+                            poem_data['title'], 
+                            poem_data['author'], 
+                            poem_data['lines']
+                        )
+                        
+                        # Format similar to our existing poems
+                        formatted_poem = f"{emoji} *{poem_data['title']}*\n\n"
+                        formatted_poem += "\n".join(poem_data['lines'])
+                        formatted_poem += f"\n\n— _{poem_data['author']}_"
+                        
+                        formatted_poems.append(formatted_poem)
+                
+                self.logger.info(f"Successfully fetched {len(formatted_poems)} poems from PoetryDB")
+                return formatted_poems
+                
+        except Exception as e:
+            self.logger.warning(f"Failed to fetch poems from PoetryDB: {e}")
+            return []
+    
+    async def _replenish_poem_cache(self):
+        """Replenish the poem cache when it's running low."""
+        if len(self.poem_cache) < 5:  # Replenish when cache is low
+            new_poems = await self._fetch_poems_from_api(self.cache_size)
+            self.poem_cache.extend(new_poems)
+            self.logger.info(f"Replenished poem cache. Now has {len(self.poem_cache)} poems")
+    
+    async def get_random_poem_async(self) -> str:
+        """Get a random poem (async version) - tries API first, falls back to hardcoded."""
+        try:
+            # Try to replenish cache if needed
+            await self._replenish_poem_cache()
+            
+            # Use cached poem if available
+            if self.poem_cache:
+                # Remove poem from cache to avoid repetition
+                poem = self.poem_cache.pop(0)
+                return poem
+            
+        except Exception as e:
+            self.logger.warning(f"Error with dynamic poem system: {e}")
+        
+        # Fallback to hardcoded poems
+        self.logger.info("Using fallback poems")
+        return self._get_fallback_poem()
+    
+    def _get_fallback_poem(self) -> str:
+        """Get a poem from the fallback collection."""
         # If we've used more than half the poems, reset to allow all again
-        if len(self.recent_poems) >= len(self.poems) // 2:
+        if len(self.recent_poems) >= len(self.fallback_poems) // 2:
             self.recent_poems = self.recent_poems[-3:]  # Keep only last 3
         
         # Get available poems (not recently used)
-        available_poems = [poem for poem in self.poems if poem not in self.recent_poems]
+        available_poems = [poem for poem in self.fallback_poems if poem not in self.recent_poems]
         
         # If somehow all poems are recent (shouldn't happen), use all poems
         if not available_poems:
-            available_poems = self.poems
+            available_poems = self.fallback_poems
         
         # Select a random poem from available ones
         selected_poem = random.choice(available_poems)
@@ -165,6 +313,25 @@ class ContentManager:
         self.recent_poems.append(selected_poem)
         
         return selected_poem
+    
+    def get_random_poem(self) -> str:
+        """Get a random poem (sync wrapper) - tries API first, falls back to hardcoded."""
+        try:
+            # Try to run the async version
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We're in an async context, create a new task
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.get_random_poem_async())
+                    return future.result(timeout=self.api_timeout + 1)
+            else:
+                # We can run async directly
+                return asyncio.run(self.get_random_poem_async())
+        except Exception as e:
+            self.logger.warning(f"Failed to get dynamic poem: {e}")
+            # Fallback to hardcoded poems
+            return self._get_fallback_poem()
     
     def get_image_for_hydration_level(self, level: int, theme: str = "bluey") -> str:
         """Get image filename for the given hydration level and theme."""
