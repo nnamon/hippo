@@ -293,36 +293,6 @@ class TestNextReminderCalculation:
         assert result is not None
         assert "in 1 minute" in result
 
-    @pytest.mark.asyncio
-    async def test_custom_hours_command_new_user(self, hippo_bot, mock_update, mock_context):
-        """Test /custom_hours command for new user."""
-        user_id = mock_update.effective_user.id
-        mock_update.message.reply_text = AsyncMock()
-        
-        await hippo_bot.custom_hours_command(mock_update, mock_context)
-        
-        # Should ask user to run /start first
-        mock_update.message.reply_text.assert_called_once()
-        args, kwargs = mock_update.message.reply_text.call_args
-        assert "Please use /start first" in args[0]
-
-    @pytest.mark.asyncio
-    async def test_custom_hours_command_existing_user(self, hippo_bot, mock_update, mock_context):
-        """Test /custom_hours command for existing user."""
-        user_id = mock_update.effective_user.id
-        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
-        
-        mock_update.message.reply_text = AsyncMock()
-        
-        await hippo_bot.custom_hours_command(mock_update, mock_context)
-        
-        # Should show custom hours setup interface
-        mock_update.message.reply_text.assert_called_once()
-        args, kwargs = mock_update.message.reply_text.call_args
-        assert "Custom Waking Hours Setup" in args[0]
-        assert "Current hours:" in args[0]
-        assert kwargs['parse_mode'] == 'Markdown'
-        assert 'reply_markup' in kwargs
 
     @pytest.mark.asyncio  
     async def test_custom_hours_start_callback(self, hippo_bot, mock_callback_query, mock_context):
@@ -349,10 +319,10 @@ class TestNextReminderCalculation:
         
         await hippo_bot._handle_custom_hours_callback(mock_callback_query)
         
-        # Should show cancellation message
+        # Should return to waking hours setup menu
         mock_callback_query.edit_message_text.assert_called_once()
         args, kwargs = mock_callback_query.edit_message_text.call_args
-        assert "Custom Hours Setup Cancelled" in args[0]
+        assert "Choose your waking hours" in args[0]
 
     @pytest.mark.asyncio
     async def test_start_hour_selection(self, hippo_bot, mock_callback_query, mock_context):
