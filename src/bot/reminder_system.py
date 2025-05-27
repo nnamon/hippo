@@ -180,8 +180,23 @@ class ReminderSystem:
             # Get current hydration level
             hydration_level = await self.database.calculate_hydration_level(user_id)
             
+            # Get recent stats for display
+            stats = await self.database.get_user_hydration_stats(user_id, days=1)
+            total_today = stats['confirmed'] + stats['missed']
+            success_rate = (stats['confirmed'] / total_today * 100) if total_today > 0 else 0
+            
             # Get content for the reminder
             content = self.content_manager.get_reminder_content(hydration_level, user_data['theme'])
+            
+            # Hydration level descriptions
+            level_descriptions = [
+                "😵 Dehydrated",
+                "😟 Low hydration", 
+                "😐 Moderate hydration",
+                "😊 Good hydration",
+                "😄 Great hydration",
+                "🤩 Perfect hydration"
+            ]
             
             # Create confirmation button
             keyboard = [[
@@ -189,9 +204,14 @@ class ReminderSystem:
             ]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            # Prepare message text
+            # Prepare message text with stats
             message_text = f"{content['poem']}\n\n"
-            message_text += "Tap the button below when you've had some water! 🦛"
+            message_text += f"📊 **Your Status:**\n"
+            message_text += f"• Current level: {level_descriptions[hydration_level]}\n"
+            message_text += f"• Today: {stats['confirmed']}✅ {stats['missed']}❌"
+            if total_today > 0:
+                message_text += f" ({success_rate:.0f}%)"
+            message_text += f"\n\n💧 Tap the button below when you've had some water! 🦛"
             
             # Send the message with image
             image_path = Path("assets") / content['image']
