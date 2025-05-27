@@ -19,9 +19,9 @@ from telegram.ext import (
     JobQueue,
 )
 
-from ..database.models import DatabaseManager
-from ..content.manager import ContentManager
-from .reminder_system import ReminderSystem
+from src.database.models import DatabaseManager
+from src.content.manager import ContentManager
+from src.bot.reminder_system import ReminderSystem
 
 logger = logging.getLogger(__name__)
 

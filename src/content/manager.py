@@ -146,10 +146,10 @@ class ContentManager:
         
         return selected_poem
     
-    def get_image_for_hydration_level(self, level: int, theme: str = "default") -> str:
+    def get_image_for_hydration_level(self, level: int, theme: str = "bluey") -> str:
         """Get image filename for the given hydration level and theme."""
         if theme not in self.themes:
-            theme = "default"
+            theme = "bluey"  # Default to bluey theme
         
         # Ensure level is within valid range
         level = max(0, min(5, level))
@@ -168,7 +168,7 @@ class ContentManager:
         
         return random.choice(self.confirmation_messages[category])
     
-    def get_reminder_content(self, hydration_level: int, theme: str = "default") -> Dict[str, Any]:
+    def get_reminder_content(self, hydration_level: int, theme: str = "bluey") -> Dict[str, Any]:
         """Get complete reminder content (poem + image) for a user."""
         return {
             "poem": self.get_random_poem(),

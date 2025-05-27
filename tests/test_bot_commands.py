@@ -1,0 +1,269 @@
+"""
+Tests for bot command handlers.
+"""
+
+import pytest
+import pytest_asyncio
+from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
+from src.bot.hippo_bot import HippoBot
+
+
+class TestBotCommands:
+    """Test bot command handlers."""
+    
+    @pytest.mark.asyncio
+    async def test_start_command_new_user(self, hippo_bot, mock_update, mock_context):
+        """Test /start command for new user."""
+        # Import here to avoid circular imports
+        from src.bot.hippo_bot import HippoBot
+        
+        user_id = mock_update.effective_user.id
+        
+        # Mock the update to have a reply method
+        mock_update.message.reply_text = AsyncMock()
+        
+        # Test start command
+        await hippo_bot.start_command(mock_update, mock_context)
+        
+        # Verify user was created
+        user = await hippo_bot.database.get_user(user_id)
+        assert user is not None
+        assert user['user_id'] == user_id
+        
+        # Verify welcome message was sent
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        assert "Welcome to Hippo" in args[0]
+    
+    @pytest.mark.asyncio
+    async def test_start_command_existing_user(self, hippo_bot, mock_update, mock_context, sample_user_data):
+        """Test /start command for existing user."""
+        user_id = mock_update.effective_user.id
+        
+        # Create user first
+        await hippo_bot.database.create_user(
+            user_id, 
+            sample_user_data['username'],
+            sample_user_data['first_name'],
+            sample_user_data['last_name']
+        )
+        
+        mock_update.message.reply_text = AsyncMock()
+        
+        # Test start command
+        await hippo_bot.start_command(mock_update, mock_context)
+        
+        # Verify welcome back message
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        assert "Welcome to Hippo" in args[0]
+    
+    @pytest.mark.asyncio
+    async def test_help_command(self, hippo_bot, mock_update, mock_context):
+        """Test /help command."""
+        mock_update.message.reply_text = AsyncMock()
+        
+        await hippo_bot.help_command(mock_update, mock_context)
+        
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        assert "/start" in args[0]
+        assert "/setup" in args[0]
+        assert "/stats" in args[0]
+    
+    @pytest.mark.asyncio
+    async def test_stats_command_no_user(self, hippo_bot, mock_update, mock_context):
+        """Test /stats command for non-existent user."""
+        mock_update.message.reply_text = AsyncMock()
+        
+        await hippo_bot.stats_command(mock_update, mock_context)
+        
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        assert "Hydration Stats" in args[0]
+    
+    @pytest.mark.asyncio
+    async def test_stats_command_with_user(self, hippo_bot, mock_update, mock_context, sample_user_data):
+        """Test /stats command for existing user."""
+        user_id = mock_update.effective_user.id
+        
+        # Create user and add some hydration data
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        await hippo_bot.database.record_hydration_event(user_id, 'confirmed', 'test1')
+        await hippo_bot.database.record_hydration_event(user_id, 'missed', 'test2')
+        
+        mock_update.message.reply_text = AsyncMock()
+        
+        await hippo_bot.stats_command(mock_update, mock_context)
+        
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        assert "Hydration Stats" in args[0]
+        assert "success rate" in args[0].lower()
+    
+    @pytest.mark.asyncio
+    async def test_setup_command(self, hippo_bot, mock_update, mock_context):
+        """Test /setup command."""
+        user_id = mock_update.effective_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_update.message.reply_text = AsyncMock()
+        
+        await hippo_bot.setup_command(mock_update, mock_context)
+        
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        assert "Setup Your Hippo Bot" in args[0]
+        assert kwargs.get('reply_markup') is not None
+
+
+class TestCallbackHandlers:
+    """Test callback query handlers."""
+    
+    @pytest.mark.asyncio
+    async def test_water_confirmation_callback(self, hippo_bot, mock_callback_query, mock_context, sample_user_data):
+        """Test water confirmation callback."""
+        user_id = mock_callback_query.from_user.id
+        reminder_id = "test_reminder_123"
+        
+        # Setup user and active reminder
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        await hippo_bot.database.create_active_reminder(
+            user_id, reminder_id, 123, user_id, 
+            datetime.now() + timedelta(minutes=30)
+        )
+        
+        # Set callback data
+        mock_callback_query.data = f"confirm_water_{reminder_id}"
+        
+        await hippo_bot._handle_water_confirmation(mock_callback_query)
+        
+        # Verify hydration event was recorded
+        stats = await hippo_bot.database.get_user_hydration_stats(user_id)
+        assert stats['confirmed'] == 1
+        
+        # Verify message was edited
+        assert mock_callback_query.edit_message_caption.called or mock_callback_query.edit_message_text.called
+    
+    @pytest.mark.asyncio
+    async def test_setup_timezone_callback(self, hippo_bot, mock_callback_query, mock_context):
+        """Test timezone setup callback."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "timezone_America/New_York"
+        
+        await hippo_bot._handle_timezone_selection(mock_callback_query)
+        
+        # Verify timezone was updated
+        user = await hippo_bot.database.get_user(user_id)
+        assert user['timezone'] == "America/New_York"
+        
+        # Verify response message
+        mock_callback_query.edit_message_text.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_theme_selection_callback(self, hippo_bot, mock_callback_query, mock_context):
+        """Test theme selection callback."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "theme_desert"
+        
+        await hippo_bot._handle_theme_selection(mock_callback_query)
+        
+        # Verify theme was updated
+        user = await hippo_bot.database.get_user(user_id)
+        assert user['theme'] == "desert"
+        
+        # Verify response message
+        mock_callback_query.edit_message_text.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_waking_hours_selection(self, hippo_bot, mock_callback_query, mock_context):
+        """Test waking hours selection callback."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "waking_7_22"
+        
+        await hippo_bot._handle_waking_hours_selection(mock_callback_query)
+        
+        # Verify waking hours were updated
+        user = await hippo_bot.database.get_user(user_id)
+        assert user['waking_start_hour'] == 7
+        assert user['waking_end_hour'] == 22
+        
+        # Verify response message
+        mock_callback_query.edit_message_text.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_reminder_interval_selection(self, hippo_bot, mock_callback_query, mock_context):
+        """Test reminder interval selection callback."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "interval_30"
+        
+        await hippo_bot._handle_interval_selection(mock_callback_query)
+        
+        # Verify interval was updated
+        user = await hippo_bot.database.get_user(user_id)
+        assert user['reminder_interval_minutes'] == 30
+        
+        # Verify response message
+        mock_callback_query.edit_message_text.assert_called_once()
+
+
+class TestNextReminderCalculation:
+    """Test next reminder time calculation."""
+    
+    @pytest.mark.asyncio
+    async def test_calculate_next_reminder_time_24_7_mode(self, hippo_bot):
+        """Test next reminder calculation for 24/7 mode."""
+        user_data = {
+            'waking_start_hour': 0,
+            'waking_start_minute': 0,
+            'waking_end_hour': 23,
+            'waking_end_minute': 0,
+            'reminder_interval_minutes': 60,
+            'timezone': 'Asia/Singapore'
+        }
+        
+        result = await hippo_bot._calculate_next_reminder_time(user_data)
+        assert result is not None
+        assert "in 1 hour" in result
+        assert ":" in result  # Should contain time
+    
+    @pytest.mark.asyncio
+    async def test_calculate_next_reminder_time_normal_hours(self, hippo_bot):
+        """Test next reminder calculation for normal waking hours."""
+        user_data = {
+            'waking_start_hour': 7,
+            'waking_start_minute': 0,
+            'waking_end_hour': 22,
+            'waking_end_minute': 0,
+            'reminder_interval_minutes': 30,
+            'timezone': 'Asia/Singapore'
+        }
+        
+        result = await hippo_bot._calculate_next_reminder_time(user_data)
+        assert result is not None
+        assert "30 minutes" in result or "when you wake up" in result
+    
+    @pytest.mark.asyncio
+    async def test_calculate_next_reminder_time_short_interval(self, hippo_bot):
+        """Test next reminder calculation for short intervals."""
+        user_data = {
+            'waking_start_hour': 0,
+            'waking_start_minute': 0,
+            'waking_end_hour': 23,
+            'waking_end_minute': 0,
+            'reminder_interval_minutes': 1,
+            'timezone': 'Asia/Singapore'
+        }
+        
+        result = await hippo_bot._calculate_next_reminder_time(user_data)
+        assert result is not None
+        assert "in 1 minute" in result
