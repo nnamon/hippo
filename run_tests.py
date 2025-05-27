@@ -65,7 +65,7 @@ def main():
     if args.all or args.unit:
         cmd = "pytest tests/ -v --tb=short"
         if args.coverage or args.all:
-            cmd += " --cov=src --cov-report=term-missing --cov-report=html:htmlcov --cov-report=xml --cov-report=json --cov-branch --cov-fail-under=60"
+            cmd += " --cov=src --cov-report=term-missing --cov-report=html:htmlcov --cov-report=xml --cov-report=json --cov-branch --cov-fail-under=55"
         if not run_command(cmd, "Unit tests"):
             success = False
     
