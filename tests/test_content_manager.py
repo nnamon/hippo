@@ -10,7 +10,7 @@ class TestContentManager:
     
     def test_content_manager_initialization(self, content_manager):
         """Test content manager initializes correctly."""
-        assert len(content_manager.poems) == 20
+        assert len(content_manager.poems) == 30
         assert len(content_manager.themes) == 4
         assert isinstance(content_manager.confirmation_messages, dict)
         assert len(content_manager.recent_poems) == 0
@@ -30,12 +30,12 @@ class TestContentManager:
         """Test that recent poems are avoided."""
         # Get half the poems to trigger reset
         poems_gotten = []
-        for _ in range(10):  # Half of 20 poems
+        for _ in range(15):  # Half of 30 poems
             poem = content_manager.get_random_poem()
             poems_gotten.append(poem)
         
         # All should be different
-        assert len(set(poems_gotten)) == 10
+        assert len(set(poems_gotten)) == 15
         
         # Get another poem to trigger reset
         next_poem = content_manager.get_random_poem()

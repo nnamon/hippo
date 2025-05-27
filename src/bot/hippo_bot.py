@@ -117,6 +117,7 @@ class HippoBot:
         self.application.add_handler(CommandHandler("help", self.help_command))
         self.application.add_handler(CommandHandler("setup", self.setup_command))
         self.application.add_handler(CommandHandler("stats", self.stats_command))
+        self.application.add_handler(CommandHandler("poem", self.poem_command))
         self.application.add_handler(CommandHandler("reset", self.reset_command))
         
         # Callback query handler for buttons
@@ -190,6 +191,7 @@ class HippoBot:
 /start - Welcome message and setup check
 /setup - Configure your reminder preferences
 /stats - View your hydration statistics
+/poem - Get a random water reminder poem
 /reset - Delete all your data and start fresh
 /help - Show this help message
 
@@ -257,6 +259,32 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         stats_text += f"Current hydration level:\n{level_descriptions[hydration_level]}"
         
         await update.message.reply_text(stats_text, parse_mode='Markdown')
+    
+    async def poem_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /poem command."""
+        try:
+            # Check if content manager is initialized
+            if not self.content_manager:
+                logger.error("Content manager not initialized")
+                await update.message.reply_text(
+                    "❌ Bot is still starting up. Please try again in a moment!"
+                )
+                return
+            
+            # Get a random poem from the content manager
+            poem = self.content_manager.get_random_poem()
+            
+            # Format the response with a nice header
+            poem_text = f"🎭 *Here's a water reminder poem for you:*\n\n{poem}\n\n"
+            poem_text += "💧 Remember to stay hydrated! 🦛"
+            
+            await update.message.reply_text(poem_text, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Error handling poem command: {e}")
+            await update.message.reply_text(
+                "❌ Sorry, I couldn't fetch a poem right now. Please try again later!"
+            )
     
     async def reset_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /reset command with confirmation."""
