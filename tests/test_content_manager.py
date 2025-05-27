@@ -4,7 +4,7 @@ Tests for content manager functionality.
 
 import pytest
 import asyncio
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, Mock
 
 
 class TestContentManager:
@@ -201,7 +201,7 @@ class TestDynamicPoemGeneration:
         ]
         
         with patch('httpx.AsyncClient') as mock_client:
-            mock_response = AsyncMock()
+            mock_response = Mock()
             mock_response.json.return_value = mock_response_data
             mock_response.raise_for_status.return_value = None
             mock_client.return_value.__aenter__.return_value.get.return_value = mock_response
@@ -236,7 +236,7 @@ class TestDynamicPoemGeneration:
         ]
         
         with patch('httpx.AsyncClient') as mock_client:
-            mock_response = AsyncMock()
+            mock_response = Mock()
             mock_response.json.return_value = mock_response_data
             mock_response.raise_for_status.return_value = None
             mock_client.return_value.__aenter__.return_value.get.return_value = mock_response
