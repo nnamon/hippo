@@ -99,16 +99,31 @@ class ContentManager:
             "🌿 *Nature's Call*\n\nBirds and bees all know it's true,\nWater's essential through and through.\nAnswer nature's gentle plea,\nSip some water, wild and free! 🦋"
         ]
     
-    def _load_confirmation_messages(self) -> List[str]:
-        """Load confirmation messages for different hydration levels."""
-        return [
-            "You're taking great steps toward better hydration! 🌱",
-            "Your body thanks you for that refreshing drink! 💧", 
-            "Excellent! Keep up the good hydration habits! ⭐",
-            "Way to go! Your cells are dancing with joy! 💃",
-            "Fantastic! You're becoming a hydration champion! 🏆",
-            "Amazing work! You're glowing with good health! ✨"
-        ]
+    def _load_confirmation_messages(self) -> Dict[str, List[str]]:
+        """Load confirmation messages organized by hydration level."""
+        return {
+            "low": [
+                "Great start! Every sip counts toward better hydration. 🌱💧",
+                "Your body is grateful for that refreshing drink! Keep it up! 💙", 
+                "Excellent choice! You're on the path to better wellness. 🎯",
+                "Way to go! Your hippo friend is proud of your effort! 🦛💫",
+                "Nice work! Building healthy habits one sip at a time. ✨"
+            ],
+            "moderate": [
+                "Fantastic! You're building excellent hydration momentum! 🚀💧",
+                "Your cells are celebrating that refreshing drink! 💃✨", 
+                "Great progress! Your dedication to health really shows. 🌟",
+                "Wonderful! You're becoming a true hydration champion! 🏆",
+                "Excellent habit! Your body feels the positive energy. ⚡💙"
+            ],
+            "high": [
+                "Outstanding! You're absolutely crushing your hydration goals! 🏆💧",
+                "Incredible dedication! Your body is radiating with health! ✨🌟", 
+                "You're a hydration superstar! Keep that amazing streak going! 🌈",
+                "Perfect! Your commitment to wellness is truly inspiring! 💎",
+                "Phenomenal work! You've mastered the art of staying hydrated! 🎉💧"
+            ]
+        }
     
     def get_random_poem(self) -> str:
         """Get a random hydration poem, avoiding recent repeats."""
@@ -143,15 +158,15 @@ class ContentManager:
     
     def get_confirmation_message(self, hydration_level: int) -> str:
         """Get a confirmation message appropriate for the hydration level."""
-        # Use hydration level to influence message selection
+        # Select message category based on hydration level
         if hydration_level >= 4:
-            messages = self.confirmation_messages[3:]  # More enthusiastic messages
+            category = "high"    # Levels 4-5: Enthusiastic messages
         elif hydration_level >= 2:
-            messages = self.confirmation_messages[1:4]  # Moderate encouragement
+            category = "moderate"  # Levels 2-3: Encouraging messages
         else:
-            messages = self.confirmation_messages[:3]   # Gentle encouragement
+            category = "low"     # Levels 0-1: Gentle encouragement
         
-        return random.choice(messages)
+        return random.choice(self.confirmation_messages[category])
     
     def get_reminder_content(self, hydration_level: int, theme: str = "default") -> Dict[str, Any]:
         """Get complete reminder content (poem + image) for a user."""

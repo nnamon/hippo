@@ -4,7 +4,8 @@ Hippo Bot - Main bot class for handling Telegram interactions.
 
 import logging
 import uuid
-from datetime import datetime, timedelta
+import pytz
+from datetime import datetime, timedelta, time
 from typing import Optional
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
@@ -323,27 +324,63 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             # Remove from active reminders
             await self.database.remove_active_reminder(reminder_id)
             
-            # Get updated hydration level
+            # Get updated hydration level and stats
             hydration_level = await self.database.calculate_hydration_level(user_id)
+            daily_stats = await self.database.get_user_hydration_stats(user_id, days=1)
             
-            # Get appropriate response
+            # Calculate daily progress
+            total_today = daily_stats['confirmed'] + daily_stats['missed']
+            success_rate = (daily_stats['confirmed'] / total_today * 100) if total_today > 0 else 0
+            
+            # Hydration level descriptions with emojis
+            level_descriptions = [
+                "😵 Dehydrated",
+                "😟 Low hydration", 
+                "😐 Moderate hydration",
+                "😊 Good hydration",
+                "😄 Great hydration",
+                "🤩 Perfect hydration"
+            ]
+            
+            # Get appropriate response message and a celebratory poem
             confirmation_message = self.content_manager.get_confirmation_message(hydration_level)
+            celebration_poem = self.content_manager.get_random_poem()
+            
+            # Build enhanced confirmation message with updated stats
+            response_text = f"✅ **Great!** {confirmation_message}\n\n"
+            response_text += f"📊 **Updated Status:**\n"
+            response_text += f"• Current level: {level_descriptions[hydration_level]}\n"
+            response_text += f"• Today: {daily_stats['confirmed']}✅ {daily_stats['missed']}❌"
+            if total_today > 0:
+                response_text += f" ({success_rate:.0f}%)"
+            response_text += "\n\n"
+            
+            # Add level-specific encouragement
+            if hydration_level >= 4:
+                response_text += "🌟 You're doing amazing! Keep up this fantastic hydration routine!\n\n"
+            elif hydration_level >= 2:
+                response_text += "💪 Great progress! You're building excellent habits!\n\n"
+            else:
+                response_text += "🌱 Every sip counts! You're on the right track!\n\n"
+            
+            # Add a celebratory poem
+            response_text += f"🎉 **Here's a little celebration poem for you:**\n\n{celebration_poem}"
             
             # Try to edit the message (could be photo with caption or text message)
             try:
                 # First try editing as photo caption
                 await query.edit_message_caption(
-                    caption=f"✅ Great! {confirmation_message}",
+                    caption=response_text,
                     parse_mode='Markdown'
                 )
             except Exception:
                 # If that fails, try editing as text message
                 await query.edit_message_text(
-                    f"✅ Great! {confirmation_message}",
+                    response_text,
                     parse_mode='Markdown'
                 )
             
-            logger.info(f"User {user_id} confirmed water drinking for reminder {reminder_id}")
+            logger.info(f"User {user_id} confirmed water drinking for reminder {reminder_id} - new level: {hydration_level}")
             
         except Exception as e:
             logger.error(f"Error handling water confirmation: {e}")
@@ -473,6 +510,98 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         
         await query.edit_message_text(text, parse_mode='Markdown', reply_markup=reply_markup)
     
+    async def _calculate_next_reminder_time(self, user_data):
+        """Calculate when the next reminder will be sent."""
+        try:
+            
+            # Get user's timezone
+            user_tz_str = user_data.get('timezone', 'Asia/Singapore')
+            user_tz = pytz.timezone(user_tz_str)
+            
+            # Get current time in user's timezone
+            now_utc = datetime.now(pytz.UTC)
+            now_local = now_utc.astimezone(user_tz)
+            
+            # Add the reminder interval to current time
+            interval_minutes = user_data['reminder_interval_minutes']
+            next_time = now_local + timedelta(minutes=interval_minutes)
+            
+            # Check if next time is within waking hours
+            start_hour = user_data['waking_start_hour']
+            end_hour = user_data['waking_end_hour']
+            start_minute = user_data['waking_start_minute']
+            end_minute = user_data['waking_end_minute']
+            
+            # If 24/7 mode, next reminder is simply current time + interval
+            if start_hour == 0 and end_hour == 23:
+                minutes_until = interval_minutes
+                if minutes_until < 60:
+                    return f"in {minutes_until} minute{'s' if minutes_until != 1 else ''} ({next_time.strftime('%I:%M %p')})"
+                else:
+                    hours = minutes_until // 60
+                    mins = minutes_until % 60
+                    if mins == 0:
+                        return f"in {hours} hour{'s' if hours != 1 else ''} ({next_time.strftime('%I:%M %p')})"
+                    else:
+                        return f"in {hours}h {mins}m ({next_time.strftime('%I:%M %p')})"
+            
+            # Check if next time falls within waking hours
+            start_time = time(start_hour, start_minute)
+            end_time = time(end_hour, end_minute)
+            next_time_only = next_time.time()
+            
+            # Handle normal waking hours (e.g., 7:00 - 22:00)
+            if start_time <= end_time:
+                if start_time <= next_time_only <= end_time:
+                    # Next reminder is within today's waking hours
+                    minutes_until = interval_minutes
+                    if minutes_until < 60:
+                        return f"in {minutes_until} minute{'s' if minutes_until != 1 else ''} ({next_time.strftime('%I:%M %p')})"
+                    else:
+                        hours = minutes_until // 60
+                        mins = minutes_until % 60
+                        if mins == 0:
+                            return f"in {hours} hour{'s' if hours != 1 else ''} ({next_time.strftime('%I:%M %p')})"
+                        else:
+                            return f"in {hours}h {mins}m ({next_time.strftime('%I:%M %p')})"
+                elif next_time_only > end_time:
+                    # Next reminder would be past bedtime, schedule for tomorrow morning
+                    tomorrow = next_time.date() + timedelta(days=1)
+                    next_reminder = user_tz.localize(datetime.combine(tomorrow, start_time))
+                    return f"tomorrow at {next_reminder.strftime('%I:%M %p')} (when you wake up)"
+                else:
+                    # Next reminder is before waking hours today
+                    today = next_time.date()
+                    next_reminder = user_tz.localize(datetime.combine(today, start_time))
+                    return f"at {next_reminder.strftime('%I:%M %p')} (when you wake up)"
+            else:
+                # Handle overnight waking hours (e.g., 22:00 - 06:00)
+                if next_time_only >= start_time or next_time_only <= end_time:
+                    # Within overnight waking hours
+                    minutes_until = interval_minutes
+                    if minutes_until < 60:
+                        return f"in {minutes_until} minute{'s' if minutes_until != 1 else ''} ({next_time.strftime('%I:%M %p')})"
+                    else:
+                        hours = minutes_until // 60
+                        mins = minutes_until % 60
+                        if mins == 0:
+                            return f"in {hours} hour{'s' if hours != 1 else ''} ({next_time.strftime('%I:%M %p')})"
+                        else:
+                            return f"in {hours}h {mins}m ({next_time.strftime('%I:%M %p')})"
+                else:
+                    # Outside waking hours, schedule for next waking period
+                    if next_time_only > end_time and next_time_only < start_time:
+                        # Between end and start time, wait until start time today
+                        today = next_time.date()
+                        next_reminder = user_tz.localize(datetime.combine(today, start_time))
+                        return f"at {next_reminder.strftime('%I:%M %p')} (when you wake up)"
+                    
+            return f"in {interval_minutes} minute{'s' if interval_minutes != 1 else ''} ({next_time.strftime('%I:%M %p')})"
+            
+        except Exception as e:
+            logger.error(f"Error calculating next reminder time: {e}")
+            return None
+
     async def _complete_setup(self, query):
         """Complete the setup process."""
         user_id = query.from_user.id
@@ -503,6 +632,12 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         }
         theme_display = theme_names.get(user_data['theme'], user_data['theme'].title())
         completion_text += f"• Theme: {theme_display}\n\n"
+        
+        # Calculate next reminder time
+        next_reminder_time = await self._calculate_next_reminder_time(user_data)
+        if next_reminder_time:
+            completion_text += f"⏰ **Next reminder:** {next_reminder_time}\n\n"
+        
         completion_text += "I'll start sending you water reminders during your waking hours! 🦛💧\n\n"
         completion_text += "Use /help to see all available commands."
         
