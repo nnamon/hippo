@@ -74,7 +74,7 @@ run_integration_tests() {
 test_production_build() {
     print_step "Testing production Docker build"
     if docker build -t hippo-bot:test . > /dev/null 2>&1; then
-        if docker run --rm hippo-bot:test python -c "from bot.hippo_bot import HippoBot; print('✅ Production build works')" > /dev/null 2>&1; then
+        if docker run --rm hippo-bot:test python -c "from src.bot.hippo_bot import HippoBot; print('✅ Production build works')" > /dev/null 2>&1; then
             print_success "Production build verified"
             return 0
         else
