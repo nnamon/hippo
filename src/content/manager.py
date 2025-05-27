@@ -96,7 +96,27 @@ class ContentManager:
             
             "🎪 *Circus of Sips*\n\nStep right up, don't be shy,\nWater's here to satisfy!\nThe greatest show for health on Earth,\nDiscover hydration's worth! 🤹",
             
-            "🌿 *Nature's Call*\n\nBirds and bees all know it's true,\nWater's essential through and through.\nAnswer nature's gentle plea,\nSip some water, wild and free! 🦋"
+            "🌿 *Nature's Call*\n\nBirds and bees all know it's true,\nWater's essential through and through.\nAnswer nature's gentle plea,\nSip some water, wild and free! 🦋",
+            
+            "🎈 *Balloon of Bliss*\n\nFill your body like a balloon,\nWater makes you feel in tune.\nRise above the daily stress,\nHydration brings pure happiness! 🎉",
+            
+            "🌊 *Ocean of Opportunity*\n\nDive deep into wellness today,\nLet water wash fatigue away.\nSurf the waves of energy new,\nHydration's calling out to you! 🏄‍♀️",
+            
+            "🎯 *Bullseye Hydration*\n\nAim for health with every sip,\nWater's your championship chip.\nHit the target, feel the rush,\nNo more thirst, no need to crush! 🏹",
+            
+            "🌅 *Dawn of Wellness*\n\nSunrise brings a brand new day,\nStart it right the water way.\nGolden light and crystal clear,\nHydration makes the path appear! ☀️",
+            
+            "🎠 *Carousel of Care*\n\nRound and round, the water flows,\nWhere it stops, your wellness grows.\nTake a ride on health's bright track,\nHydration keeps you on the back! 🎪",
+            
+            "🌟 *Stellar Sipping*\n\nLike the stars that light the night,\nWater makes your future bright.\nNavigate through life with ease,\nHydration is your master key! 🔑",
+            
+            "🦋 *Butterfly Effect*\n\nOne small sip can change your day,\nChase the sluggish blues away.\nSpread your wings and feel so light,\nWater makes everything right! 💫",
+            
+            "🎨 *Palette of Purity*\n\nMix your colors with H2O,\nWatch your energy levels grow.\nBrush away fatigue and pain,\nPaint your life with water's gain! 🖼️",
+            
+            "🌸 *Cherry Blossom Dreams*\n\nPetals fall like drops of dew,\nNature's message straight to you:\nBeauty comes from being well,\nLet hydration cast its spell! 🌺",
+            
+            "🎵 *Rhythm & Hydration*\n\nTap your feet to water's beat,\nMake your wellness feel complete.\nDance with health throughout the day,\nLet hydration lead the way! 💃"
         ]
     
     def _load_confirmation_messages(self) -> Dict[str, List[str]]:
