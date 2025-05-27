@@ -259,7 +259,8 @@ class TestDynamicPoemGeneration:
         poem = await content_manager.get_random_poem_async()
         
         assert "Cached Poem" in poem
-        assert len(content_manager.poem_cache) == 0  # Should be removed after use
+        # Cache should be replenished since it became empty (0 < 5 threshold)
+        assert len(content_manager.poem_cache) > 0
         
     @pytest.mark.asyncio
     async def test_get_random_poem_async_fallback(self, content_manager):
