@@ -52,7 +52,7 @@ jobs:
 
     - name: Test with pytest
       run: |
-        pytest tests/ -v --tb=short --cov=src --cov-report=xml --cov-report=term-missing --cov-report=html --cov-fail-under=55 --cov-branch
+        pytest tests/ -v --tb=short --cov=src --cov-report=xml --cov-report=term-missing --cov-report=html --cov-report=json --cov-fail-under=55 --cov-branch
       env:
         # Prevent interactive prompts during testing
         PYTHONPATH: ${{ github.workspace }}/src
@@ -70,6 +70,9 @@ jobs:
     - name: Generate coverage comment
       if: github.event_name == 'pull_request'
       run: |
+        echo "Checking for coverage.json file..."
+        ls -la coverage.json || echo "coverage.json not found"
+        echo "Running coverage comment script..."
         python scripts/generate_coverage_comment.py > coverage_comment.md
         echo "Coverage comment generated"
         cat coverage_comment.md
