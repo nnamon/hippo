@@ -179,6 +179,33 @@ class DatabaseManager:
             logger.error(f"Error updating theme for user {user_id}: {e}")
             return False
     
+    async def delete_user_completely(self, user_id: int) -> bool:
+        """Delete a user and all their associated data completely."""
+        try:
+            # Delete in order to respect foreign key constraints
+            # 1. Delete active reminders
+            await self.connection.execute("""
+                DELETE FROM active_reminders WHERE user_id = ?
+            """, (user_id,))
+            
+            # 2. Delete hydration events
+            await self.connection.execute("""
+                DELETE FROM hydration_events WHERE user_id = ?
+            """, (user_id,))
+            
+            # 3. Delete user record
+            await self.connection.execute("""
+                DELETE FROM users WHERE user_id = ?
+            """, (user_id,))
+            
+            await self.connection.commit()
+            logger.info(f"Completely deleted user {user_id} and all associated data")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting user {user_id}: {e}")
+            await self.connection.rollback()
+            return False
+    
     # Hydration event operations
     async def record_hydration_event(self, user_id: int, event_type: str, reminder_id: str) -> bool:
         """Record a hydration event (confirmed or missed)."""

@@ -92,6 +92,7 @@ class HippoBot:
                 BotCommand("start", "Start the bot and check setup"),
                 BotCommand("setup", "Configure reminder preferences"),
                 BotCommand("stats", "View your hydration statistics"),
+                BotCommand("reset", "Delete all your data and start fresh"),
                 BotCommand("help", "Show help and available commands")
             ]
             
@@ -115,6 +116,7 @@ class HippoBot:
         self.application.add_handler(CommandHandler("help", self.help_command))
         self.application.add_handler(CommandHandler("setup", self.setup_command))
         self.application.add_handler(CommandHandler("stats", self.stats_command))
+        self.application.add_handler(CommandHandler("reset", self.reset_command))
         
         # Callback query handler for buttons
         self.application.add_handler(CallbackQueryHandler(self.button_callback))
@@ -187,6 +189,7 @@ class HippoBot:
 /start - Welcome message and setup check
 /setup - Configure your reminder preferences
 /stats - View your hydration statistics
+/reset - Delete all your data and start fresh
 /help - Show this help message
 
 I'll send you friendly reminders to drink water with cute cartoons and poems during your waking hours!
@@ -253,6 +256,33 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         stats_text += f"Current hydration level:\n{level_descriptions[hydration_level]}"
         
         await update.message.reply_text(stats_text, parse_mode='Markdown')
+    
+    async def reset_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /reset command with confirmation."""
+        user_id = update.effective_user.id
+        
+        # Create confirmation keyboard
+        keyboard = [
+            [InlineKeyboardButton("⚠️ Yes, Delete Everything", callback_data="reset_confirm")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="reset_cancel")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        reset_text = "⚠️ *Reset Your Hippo Bot Session*\n\n"
+        reset_text += "This will **permanently delete**:\n"
+        reset_text += "• All your settings and preferences\n"
+        reset_text += "• Your hydration history and statistics\n"
+        reset_text += "• All active reminders\n"
+        reset_text += "• Your user account\n\n"
+        reset_text += "You'll need to run `/start` again to use the bot.\n\n"
+        reset_text += "⚠️ **This action cannot be undone!**\n\n"
+        reset_text += "Are you sure you want to proceed?"
+        
+        await update.message.reply_text(
+            reset_text, 
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
         
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle button callbacks."""
@@ -263,6 +293,10 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             await self._handle_water_confirmation(query)
         elif query.data == "expired_reminder":
             await query.answer("This reminder has expired. A new one will be sent soon!", show_alert=True)
+        elif query.data == "reset_confirm":
+            await self._handle_reset_confirm(query)
+        elif query.data == "reset_cancel":
+            await self._handle_reset_cancel(query)
         elif query.data.startswith("setup_"):
             await self._handle_setup_callback(query)
         elif query.data.startswith("waking_"):
@@ -653,6 +687,49 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         except Exception as e:
             logger.error(f"Error setting theme: {e}")
             await query.edit_message_text("❌ Error setting theme. Please try again.")
+    
+    async def _handle_reset_confirm(self, query):
+        """Handle reset confirmation."""
+        user_id = query.from_user.id
+        
+        try:
+            # Cancel any active reminders for this user first
+            self.reminder_system.cancel_user_reminders(self.job_queue, user_id)
+            
+            # Delete user and all their data
+            success = await self.database.delete_user_completely(user_id)
+            
+            if success:
+                await query.edit_message_text(
+                    "✅ *Reset Complete!*\n\n"
+                    "Your Hippo Bot session has been completely deleted.\n\n"
+                    "• All settings and preferences removed\n"
+                    "• Hydration history cleared\n"
+                    "• Reminders stopped\n\n"
+                    "Run `/start` to begin fresh! 🦛",
+                    parse_mode='Markdown'
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ *Reset Failed*\n\n"
+                    "There was an error deleting your data. Please try again or contact support.",
+                    parse_mode='Markdown'
+                )
+        except Exception as e:
+            logger.error(f"Error resetting user {user_id}: {e}")
+            await query.edit_message_text(
+                "❌ *Reset Failed*\n\n"
+                "An unexpected error occurred. Please try again.",
+                parse_mode='Markdown'
+            )
+    
+    async def _handle_reset_cancel(self, query):
+        """Handle reset cancellation."""
+        await query.edit_message_text(
+            "❌ *Reset Cancelled*\n\n"
+            "Your data is safe! Nothing has been deleted.\n\n"
+            "Use `/help` to see what else I can do for you! 🦛"
+        )
         
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular text messages."""
