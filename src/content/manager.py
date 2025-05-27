@@ -19,15 +19,39 @@ class ContentManager:
     
     def _load_themes(self) -> Dict[str, List[str]]:
         """Load image themes configuration."""
-        # Default theme with placeholder images
+        # Order mapping: 0_0, 1_0, 0_1, 1_1, 0_2, 1_2 corresponds to hydration levels 0-5
         return {
-            "default": [
-                "dehydrated.png",      # 0% - Very dehydrated
-                "low_hydration.png",   # 20% - Low hydration  
-                "moderate.png",        # 40% - Moderate
-                "good_hydration.png",  # 60% - Good hydration
-                "great_hydration.png", # 80% - Great hydration
-                "perfect_hydration.png" # 100% - Fully hydrated
+            "bluey": [
+                "bluey/tile_0_0.png",  # Level 0 - Dehydrated
+                "bluey/tile_1_0.png",  # Level 1 - Low hydration
+                "bluey/tile_0_1.png",  # Level 2 - Moderate
+                "bluey/tile_1_1.png",  # Level 3 - Good hydration
+                "bluey/tile_0_2.png",  # Level 4 - Great hydration
+                "bluey/tile_1_2.png"   # Level 5 - Perfect hydration
+            ],
+            "desert": [
+                "desert/tile_0_0.png", # Level 0 - Dehydrated
+                "desert/tile_1_0.png", # Level 1 - Low hydration
+                "desert/tile_0_1.png", # Level 2 - Moderate
+                "desert/tile_1_1.png", # Level 3 - Good hydration
+                "desert/tile_0_2.png", # Level 4 - Great hydration
+                "desert/tile_1_2.png"  # Level 5 - Perfect hydration
+            ],
+            "spring": [
+                "spring/tile_0_0.png", # Level 0 - Dehydrated
+                "spring/tile_1_0.png", # Level 1 - Low hydration
+                "spring/tile_0_1.png", # Level 2 - Moderate
+                "spring/tile_1_1.png", # Level 3 - Good hydration
+                "spring/tile_0_2.png", # Level 4 - Great hydration
+                "spring/tile_1_2.png"  # Level 5 - Perfect hydration
+            ],
+            "vivid": [
+                "vivid/tile_0_0.png",  # Level 0 - Dehydrated
+                "vivid/tile_1_0.png",  # Level 1 - Low hydration
+                "vivid/tile_0_1.png",  # Level 2 - Moderate
+                "vivid/tile_1_1.png",  # Level 3 - Good hydration
+                "vivid/tile_0_2.png",  # Level 4 - Great hydration
+                "vivid/tile_1_2.png"   # Level 5 - Perfect hydration
             ]
         }
     

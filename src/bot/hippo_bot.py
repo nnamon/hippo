@@ -202,7 +202,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             [InlineKeyboardButton("🌍 Set Timezone", callback_data="setup_timezone")],
             [InlineKeyboardButton("🌅 Set Waking Hours", callback_data="setup_waking_hours")],
             [InlineKeyboardButton("⏰ Set Reminder Interval", callback_data="setup_interval")],
-            [InlineKeyboardButton("🎨 Choose Theme (Coming Soon)", callback_data="setup_theme")],
+            [InlineKeyboardButton("🎨 Choose Theme", callback_data="setup_theme")],
             [InlineKeyboardButton("✅ Finish Setup and View Settings", callback_data="setup_complete")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -271,6 +271,8 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             await self._handle_interval_selection(query)
         elif query.data.startswith("timezone_"):
             await self._handle_timezone_selection(query)
+        elif query.data.startswith("theme_"):
+            await self._handle_theme_selection(query)
         else:
             await query.edit_message_text("Unknown button action")
     
@@ -331,7 +333,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         elif action == "interval":
             await self._setup_interval(query)
         elif action == "theme":
-            await query.edit_message_text("🎨 Theme selection coming soon! For now, you'll use the default hippo theme.")
+            await self._setup_theme(query)
         elif action == "complete":
             await self._complete_setup(query)
         elif action == "back":
@@ -340,7 +342,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
                 [InlineKeyboardButton("🌍 Set Timezone", callback_data="setup_timezone")],
                 [InlineKeyboardButton("🌅 Set Waking Hours", callback_data="setup_waking_hours")],
                 [InlineKeyboardButton("⏰ Set Reminder Interval", callback_data="setup_interval")],
-                [InlineKeyboardButton("🎨 Choose Theme (Coming Soon)", callback_data="setup_theme")],
+                [InlineKeyboardButton("🎨 Choose Theme", callback_data="setup_theme")],
                 [InlineKeyboardButton("✅ Finish Setup and View Settings", callback_data="setup_complete")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -377,6 +379,27 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         text = "🌍 *Choose Your Timezone*\n\n"
         text += "Select your timezone for accurate reminder scheduling:\n\n"
         text += "Current default is Singapore (UTC+8)"
+        
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=reply_markup)
+    
+    async def _setup_theme(self, query):
+        """Handle theme setup."""
+        keyboard = [
+            [InlineKeyboardButton("💙 Bluey (Default)", callback_data="theme_bluey")],
+            [InlineKeyboardButton("🏜️ Desert", callback_data="theme_desert")],
+            [InlineKeyboardButton("🌸 Spring", callback_data="theme_spring")],
+            [InlineKeyboardButton("🌈 Vivid", callback_data="theme_vivid")],
+            [InlineKeyboardButton("⬅️ Back to Setup", callback_data="setup_back")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        text = "🎨 *Choose Your Theme*\n\n"
+        text += "Select a visual theme for your water reminders:\n\n"
+        text += "• **Bluey**: Cool blue tones (default)\n"
+        text += "• **Desert**: Warm sandy colors\n"
+        text += "• **Spring**: Fresh green nature\n"
+        text += "• **Vivid**: Bright and colorful\n\n"
+        text += "Each theme shows different cartoon styles!"
         
         await query.edit_message_text(text, parse_mode='Markdown', reply_markup=reply_markup)
     
@@ -437,7 +460,15 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         completion_text += f"• Timezone: {user_data.get('timezone', 'Asia/Singapore')}\n"
         completion_text += f"• Waking Hours: {waking_display}\n"
         completion_text += f"• Reminder Interval: {user_data['reminder_interval_minutes']} minutes\n"
-        completion_text += f"• Theme: {user_data['theme']}\n\n"
+        # Get display name for theme
+        theme_names = {
+            "bluey": "Bluey (Cool Blue)",
+            "desert": "Desert (Warm Sandy)",
+            "spring": "Spring (Fresh Green)",
+            "vivid": "Vivid (Bright & Colorful)"
+        }
+        theme_display = theme_names.get(user_data['theme'], user_data['theme'].title())
+        completion_text += f"• Theme: {theme_display}\n\n"
         completion_text += "I'll start sending you water reminders during your waking hours! 🦛💧\n\n"
         completion_text += "Use /help to see all available commands."
         
@@ -465,7 +496,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             keyboard = [
                 [InlineKeyboardButton("🌅 Set Waking Hours", callback_data="setup_waking_hours")],
                 [InlineKeyboardButton("⏰ Set Reminder Interval", callback_data="setup_interval")],
-                [InlineKeyboardButton("🎨 Choose Theme (Coming Soon)", callback_data="setup_theme")],
+                [InlineKeyboardButton("🎨 Choose Theme", callback_data="setup_theme")],
                 [InlineKeyboardButton("✅ Finish Setup and View Settings", callback_data="setup_complete")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -584,6 +615,44 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
         except Exception as e:
             logger.error(f"Error setting timezone: {e}")
             await query.edit_message_text("❌ Error setting timezone. Please try again.")
+    
+    async def _handle_theme_selection(self, query):
+        """Handle theme selection."""
+        user_id = query.from_user.id
+        theme_str = query.data.replace("theme_", "")
+        
+        try:
+            # Validate theme exists
+            available_themes = self.content_manager.get_available_themes()
+            if theme_str not in available_themes:
+                await query.edit_message_text("❌ Invalid theme selected. Please try again.")
+                return
+            
+            success = await self.database.update_user_theme(user_id, theme_str)
+            
+            if success:
+                # Get display name for theme
+                theme_names = {
+                    "bluey": "Bluey (Cool Blue)",
+                    "desert": "Desert (Warm Sandy)",
+                    "spring": "Spring (Fresh Green)",
+                    "vivid": "Vivid (Bright & Colorful)"
+                }
+                display_name = theme_names.get(theme_str, theme_str.title())
+                
+                await query.edit_message_text(
+                    f"✅ Theme set to {display_name}!\n\n"
+                    "Your reminders will now use this visual style!",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("✅ Finish Setup", callback_data="setup_complete")
+                    ]])
+                )
+            else:
+                await query.edit_message_text("❌ Error saving theme. Please try again.")
+                
+        except Exception as e:
+            logger.error(f"Error setting theme: {e}")
+            await query.edit_message_text("❌ Error setting theme. Please try again.")
         
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular text messages."""

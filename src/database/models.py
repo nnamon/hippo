@@ -46,7 +46,7 @@ class DatabaseManager:
                 waking_end_hour INTEGER DEFAULT 22,
                 waking_end_minute INTEGER DEFAULT 0,
                 reminder_interval_minutes INTEGER DEFAULT 60,
-                theme TEXT DEFAULT 'default',
+                theme TEXT DEFAULT 'bluey',
                 timezone TEXT DEFAULT 'Asia/Singapore',
                 is_active BOOLEAN DEFAULT 1
             )
@@ -164,6 +164,19 @@ class DatabaseManager:
             return True
         except Exception as e:
             logger.error(f"Error updating timezone for user {user_id}: {e}")
+            return False
+    
+    async def update_user_theme(self, user_id: int, theme: str) -> bool:
+        """Update user's theme."""
+        try:
+            await self.connection.execute("""
+                UPDATE users SET theme = ? WHERE user_id = ?
+            """, (theme, user_id))
+            await self.connection.commit()
+            logger.info(f"Updated theme for user {user_id} to {theme}")
+            return True
+        except Exception as e:
+            logger.error(f"Error updating theme for user {user_id}: {e}")
             return False
     
     # Hydration event operations
