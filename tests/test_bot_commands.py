@@ -116,6 +116,31 @@ class TestBotCommands:
         args, kwargs = mock_update.message.reply_text.call_args
         assert "Setup Your Hippo Bot" in args[0]
         assert kwargs.get('reply_markup') is not None
+    
+    @pytest.mark.asyncio
+    async def test_poem_command(self, hippo_bot, mock_update, mock_context):
+        """Test /poem command with hydration level and image."""
+        user_id = mock_update.effective_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        # Mock reply_photo method
+        mock_update.message.reply_photo = AsyncMock()
+        
+        # Mock open function for image file
+        with patch('builtins.open', create=True) as mock_open:
+            mock_open.return_value.__enter__.return_value = MagicMock()
+            
+            await hippo_bot.poem_command(mock_update, mock_context)
+        
+        # Verify image was sent with poem
+        mock_update.message.reply_photo.assert_called_once()
+        args, kwargs = mock_update.message.reply_photo.call_args
+        
+        # Check that caption contains poem and hydration status
+        caption = kwargs.get('caption', '')
+        assert "Here's a water reminder poem for you:" in caption
+        assert "Current Hydration:" in caption
+        assert "Remember to stay hydrated!" in caption
 
 
 class TestCallbackHandlers:
