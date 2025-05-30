@@ -162,14 +162,23 @@ class TestCallbackHandlers:
         # Set callback data
         mock_callback_query.data = f"confirm_water_{reminder_id}"
         
+        # Mock message to have photo (which triggers new image update behavior)
+        mock_callback_query.message.photo = [MagicMock()]  # Mock photo array
+        mock_callback_query.edit_message_media = AsyncMock()
+        
         await hippo_bot._handle_water_confirmation(mock_callback_query)
         
         # Verify hydration event was recorded
         stats = await hippo_bot.database.get_user_hydration_stats(user_id)
         assert stats['confirmed'] == 1
         
-        # Verify message was edited
-        assert mock_callback_query.edit_message_caption.called or mock_callback_query.edit_message_text.called
+        # Verify either the new image update behavior (edit_message_media) or fallback behavior was called
+        message_was_updated = (
+            mock_callback_query.edit_message_media.called
+        ) or (
+            mock_callback_query.edit_message_caption.called or mock_callback_query.edit_message_text.called
+        )
+        assert message_was_updated
     
     @pytest.mark.asyncio
     async def test_setup_timezone_callback(self, hippo_bot, mock_callback_query, mock_context):

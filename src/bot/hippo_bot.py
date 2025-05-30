@@ -7,6 +7,7 @@ import uuid
 import pytz
 from datetime import datetime, timedelta, time
 from typing import Optional
+from pathlib import Path
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
@@ -400,6 +401,10 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             hydration_level = await self.database.calculate_hydration_level(user_id)
             daily_stats = await self.database.get_user_hydration_stats(user_id, days=1)
             
+            # Get user data for theme
+            user_data = await self.database.get_user(user_id)
+            theme = user_data.get('theme', 'bluey') if user_data else 'bluey'
+            
             # Calculate daily progress
             total_today = daily_stats['confirmed'] + daily_stats['missed']
             success_rate = (daily_stats['confirmed'] / total_today * 100) if total_today > 0 else 0
@@ -438,19 +443,46 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             # Add a celebratory poem
             response_text += f"🎉 **Here's a little celebration poem for you:**\n\n{celebration_poem}"
             
-            # Try to edit the message (could be photo with caption or text message)
+            # Get the updated image for the new hydration level
+            updated_image_path = self.content_manager.get_image_for_hydration_level(hydration_level, theme)
+            full_image_path = f"assets/{updated_image_path}"
+            
+            # Try to update the message with new image and text
             try:
-                # First try editing as photo caption
-                await query.edit_message_caption(
-                    caption=response_text,
-                    parse_mode='Markdown'
-                )
-            except Exception:
-                # If that fails, try editing as text message
-                await query.edit_message_text(
-                    response_text,
-                    parse_mode='Markdown'
-                )
+                # Check if original message has a photo
+                if query.message.photo:
+                    # Edit the message media (image) and caption
+                    from telegram import InputMediaPhoto
+                    
+                    with open(full_image_path, 'rb') as photo:
+                        new_media = InputMediaPhoto(
+                            media=photo,
+                            caption=response_text,
+                            parse_mode='Markdown'
+                        )
+                        await query.edit_message_media(media=new_media)
+                else:
+                    # Original message was text-only, try to edit it
+                    await query.edit_message_text(
+                        response_text,
+                        parse_mode='Markdown'
+                    )
+            except Exception as edit_error:
+                logger.warning(f"Could not update message with new image: {edit_error}")
+                # Fallback: try to edit caption/text only without changing image
+                try:
+                    # First try editing as photo caption
+                    await query.edit_message_caption(
+                        caption=response_text,
+                        parse_mode='Markdown'
+                    )
+                except Exception as fallback_error:
+                    logger.warning(f"Caption edit fallback also failed: {fallback_error}")
+                    # If that fails, try editing as text message
+                    await query.edit_message_text(
+                        response_text,
+                        parse_mode='Markdown'
+                    )
             
             logger.info(f"User {user_id} confirmed water drinking for reminder {reminder_id} - new level: {hydration_level}")
             
