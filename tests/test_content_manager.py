@@ -115,11 +115,11 @@ class TestContentManager:
         """Test complete reminder content generation."""
         content = content_manager.get_reminder_content(3, 'spring')
         
-        assert 'poem' in content
+        assert 'quote' in content
         assert 'image' in content
         assert 'hydration_level' in content
         
-        assert content['poem'] in content_manager.fallback_poems
+        assert content['quote'] in content_manager.fallback_quotes
         assert content['image'].startswith('spring/')
         assert content['hydration_level'] == 3
     
