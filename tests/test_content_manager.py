@@ -17,7 +17,7 @@ class TestContentManager:
         assert isinstance(content_manager.confirmation_messages, dict)
         assert len(content_manager.recent_poems) == 0
         assert len(content_manager.poem_cache) == 0
-        assert content_manager.cache_size == 20
+        assert content_manager.cache_size == 30
         assert content_manager.api_timeout == 5.0
     
     def test_get_random_poem_fallback(self, content_manager):
@@ -115,11 +115,11 @@ class TestContentManager:
         """Test complete reminder content generation."""
         content = content_manager.get_reminder_content(3, 'spring')
         
-        assert 'poem' in content
+        assert 'quote' in content
         assert 'image' in content
         assert 'hydration_level' in content
         
-        assert content['poem'] in content_manager.fallback_poems
+        assert content['quote'] in content_manager.fallback_quotes
         assert content['image'].startswith('spring/')
         assert content['hydration_level'] == 3
     
@@ -208,7 +208,8 @@ class TestDynamicPoemGeneration:
             
             poems = await content_manager._fetch_poems_from_api(1)
             
-            assert len(poems) == 1
+            # Should get 3 poems (one for each line count: 4, 5, 8)
+            assert len(poems) == 3
             assert "Test Poem" in poems[0]
             assert "Test Author" in poems[0]
             assert "Line one" in poems[0]
@@ -232,7 +233,7 @@ class TestDynamicPoemGeneration:
                 "author": "Test Author",
                 "lines": ["Line one", "Line two", "Line three", "Line four"],
                 "linecount": "4"
-            } for i in range(5)
+            } for i in range(10)
         ]
         
         with patch('httpx.AsyncClient') as mock_client:
@@ -247,8 +248,8 @@ class TestDynamicPoemGeneration:
             # Replenish cache
             await content_manager._replenish_poem_cache()
             
-            # Cache should now have poems
-            assert len(content_manager.poem_cache) == 5
+            # Cache should now have poems (30 = 10 poems × 3 line counts)
+            assert len(content_manager.poem_cache) == 30
             
     @pytest.mark.asyncio
     async def test_get_random_poem_async_with_cache(self, content_manager):

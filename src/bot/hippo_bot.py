@@ -437,12 +437,15 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
                 "🤩 Perfect hydration"
             ]
             
-            # Get appropriate response message and a celebratory poem
+            # Get appropriate response message, fresh inspirational quote, and celebratory poem
             confirmation_message = self.content_manager.get_confirmation_message(hydration_level)
+            fresh_quote = self.content_manager.get_random_quote()
             celebration_poem = self.content_manager.get_random_poem()
             
-            # Build enhanced confirmation message with updated stats
-            response_text = f"✅ **Great!** {confirmation_message}\n\n"
+            # Build enhanced confirmation message with fresh quote and poem
+            response_text = f"✅ **Excellent!** {confirmation_message}\n\n"
+            response_text += f"💭 **Your Inspiration:**\n{fresh_quote}\n\n"
+            
             response_text += f"📊 **Updated Status:**\n"
             response_text += f"• Current level: {level_descriptions[hydration_level]}\n"
             response_text += f"• Today: {daily_stats['confirmed']}✅ {daily_stats['missed']}❌"
@@ -458,8 +461,8 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             else:
                 response_text += "🌱 Every sip counts! You're on the right track!\n\n"
             
-            # Add a celebratory poem
-            response_text += f"🎉 **Here's a little celebration poem for you:**\n\n{celebration_poem}"
+            # Add a celebratory poem as a reward
+            response_text += f"🎉 **Here's a celebration poem just for you:**\n\n{celebration_poem}"
             
             # Get the updated image for the new hydration level
             updated_image_path = self.content_manager.get_image_for_hydration_level(hydration_level, theme)
