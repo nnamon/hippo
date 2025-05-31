@@ -37,11 +37,26 @@ print_warning() {
 # Build test container
 build_test_container() {
     print_step "Building test container"
-    if docker build -f Dockerfile.test -t hippo-test:latest . > /dev/null 2>&1; then
+    BUILD_OUTPUT=$(docker build -f Dockerfile.test -t hippo-test:latest . 2>&1)
+    if [ $? -eq 0 ]; then
         print_success "Test container built successfully"
         return 0
     else
         print_error "Failed to build test container"
+        
+        # Check for keychain access issues (common on macOS)
+        if echo "$BUILD_OUTPUT" | grep -q "keychain cannot be accessed"; then
+            echo ""
+            print_warning "macOS Keychain Access Issue Detected"
+            echo "The keychain is locked and Docker cannot access credentials."
+            echo ""
+            echo "To fix this, run the following command and try again:"
+            echo -e "${YELLOW}security -v unlock-keychain ~/Library/Keychains/login.keychain-db${NC}"
+            echo ""
+            echo "You may be prompted to enter your macOS password."
+        else
+            echo "$BUILD_OUTPUT"
+        fi
         return 1
     fi
 }
@@ -50,7 +65,7 @@ build_test_container() {
 run_unit_tests() {
     print_step "Running unit tests in Docker container"
     if docker run --rm hippo-test:latest; then
-        print_success "Unit tests passed (64 tests)"
+        print_success "Unit tests passed (105 tests)"
         return 0
     else
         print_error "Unit tests failed"
@@ -73,16 +88,33 @@ run_integration_tests() {
 # Test production build
 test_production_build() {
     print_step "Testing production Docker build"
-    if docker build -t hippo-bot:test . > /dev/null 2>&1; then
-        if docker run --rm hippo-bot:test python -c "from src.bot.hippo_bot import HippoBot; print('✅ Production build works')" > /dev/null 2>&1; then
+    BUILD_OUTPUT=$(docker build -t hippo-bot:test . 2>&1)
+    if [ $? -eq 0 ]; then
+        TEST_OUTPUT=$(docker run --rm hippo-bot:test python -c "from src.bot.hippo_bot import HippoBot; print('✅ Production build works')" 2>&1)
+        if [ $? -eq 0 ]; then
             print_success "Production build verified"
             return 0
         else
             print_error "Production build import test failed"
+            echo "$TEST_OUTPUT"
             return 1
         fi
     else
         print_error "Production build failed"
+        
+        # Check for keychain access issues (common on macOS)
+        if echo "$BUILD_OUTPUT" | grep -q "keychain cannot be accessed"; then
+            echo ""
+            print_warning "macOS Keychain Access Issue Detected"
+            echo "The keychain is locked and Docker cannot access credentials."
+            echo ""
+            echo "To fix this, run the following command and try again:"
+            echo -e "${YELLOW}security -v unlock-keychain ~/Library/Keychains/login.keychain-db${NC}"
+            echo ""
+            echo "You may be prompted to enter your macOS password."
+        else
+            echo "$BUILD_OUTPUT"
+        fi
         return 1
     fi
 }
