@@ -23,8 +23,9 @@ class ContentManager:
         
         # Dynamic poem system
         self.poem_cache = []  # Cache of fetched poems from PoetryDB
-        self.cache_size = 20  # Number of poems to keep in cache
-        self.poetrydb_url = "https://poetrydb.org/random,linecount/{};4"
+        self.cache_size = 30  # Number of poems to keep in cache (10 per line count)
+        self.poetrydb_base_url = "https://poetrydb.org/random,linecount/{};{}"
+        self.poem_line_counts = [4, 5, 8]  # Different line counts to fetch
         
         # Inspirational quotes system
         self.quote_cache = []  # Cache of fetched quotes from ZenQuotes
@@ -262,34 +263,51 @@ class ContentManager:
         # Default water-related emoji for hydration context
         return random.choice(['💧', '🎭', '📜', '✨'])
     
-    async def _fetch_poems_from_api(self, count: int = 5) -> List[Dict[str, Any]]:
-        """Fetch poems from PoetryDB API."""
+    async def _fetch_poems_from_api(self, count: int = 5) -> List[str]:
+        """Fetch poems from PoetryDB API with multiple line counts."""
+        all_formatted_poems = []
+        
         try:
-            url = self.poetrydb_url.format(count)
             async with httpx.AsyncClient(timeout=self.api_timeout) as client:
-                response = await client.get(url)
-                response.raise_for_status()
-                
-                poems_data = response.json()
-                formatted_poems = []
-                
-                for poem_data in poems_data:
-                    if poem_data.get('title') and poem_data.get('author') and poem_data.get('lines'):
-                        emoji = self._classify_poem_emoji(
-                            poem_data['title'], 
-                            poem_data['author'], 
-                            poem_data['lines']
-                        )
+                # Fetch poems for each line count
+                for line_count in self.poem_line_counts:
+                    try:
+                        # Calculate how many poems to fetch per line count
+                        poems_per_count = max(1, count // len(self.poem_line_counts))
+                        url = self.poetrydb_base_url.format(poems_per_count, line_count)
                         
-                        # Format similar to our existing poems
-                        formatted_poem = f"{emoji} *{poem_data['title']}*\n\n"
-                        formatted_poem += "\n".join(poem_data['lines'])
-                        formatted_poem += f"\n\n— _{poem_data['author']}_"
+                        response = await client.get(url)
+                        response.raise_for_status()
                         
-                        formatted_poems.append(formatted_poem)
+                        poems_data = response.json()
+                        
+                        # Handle case where API returns single poem as dict instead of list
+                        if isinstance(poems_data, dict):
+                            poems_data = [poems_data]
+                        
+                        for poem_data in poems_data:
+                            if poem_data.get('title') and poem_data.get('author') and poem_data.get('lines'):
+                                emoji = self._classify_poem_emoji(
+                                    poem_data['title'], 
+                                    poem_data['author'], 
+                                    poem_data['lines']
+                                )
+                                
+                                # Format similar to our existing poems
+                                formatted_poem = f"{emoji} *{poem_data['title']}*\n\n"
+                                formatted_poem += "\n".join(poem_data['lines'])
+                                formatted_poem += f"\n\n— _{poem_data['author']}_"
+                                
+                                all_formatted_poems.append(formatted_poem)
+                        
+                        self.logger.info(f"Fetched {len(poems_data) if isinstance(poems_data, list) else 1} poems with {line_count} lines")
+                        
+                    except Exception as line_count_error:
+                        self.logger.warning(f"Failed to fetch {line_count}-line poems: {line_count_error}")
+                        continue
                 
-                self.logger.info(f"Successfully fetched {len(formatted_poems)} poems from PoetryDB")
-                return formatted_poems
+                self.logger.info(f"Successfully fetched total of {len(all_formatted_poems)} poems from PoetryDB")
+                return all_formatted_poems
                 
         except Exception as e:
             self.logger.warning(f"Failed to fetch poems from PoetryDB: {e}")
