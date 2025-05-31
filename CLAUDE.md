@@ -98,25 +98,39 @@ docker run --rm hippo-bot:test python -c "from bot.hippo_bot import HippoBot; pr
 
 ### GitHub Actions CI/CD Pipeline
 
-**Single Comprehensive Workflow** (`.github/workflows/test.yml`)
+**Streamlined CI Workflow** (`.github/workflows/ci.yml`)
+
+**Design Philosophy**: All CI operations use scripts from the `scripts/` directory for easy local replication.
 
 **Triggers**: Pushes to `main`/`develop`, PRs, manual dispatch
 
 **Jobs**:
-1. **🧪 Unit Tests**: Python environment with pytest + coverage (55% minimum)
-2. **🐳 Docker Tests**: 
-   - Build test container (Dockerfile.test)
-   - Run unit tests in container environment  
-   - Run integration tests in container
-   - Validate production Docker build
-3. **🔒 Security**: Bandit + Safety scans (continue-on-error)
-4. **📊 Summary**: Combined results with pass/fail status
+1. **🧪 Test Job**: 
+   - Runs `./scripts/run_tests.sh --all` (unit + integration + production build tests)
+   - Generates coverage reports and PR comments
+   - Minimum coverage: 55% (enforced)
+   
+2. **🔒 Security Job**: 
+   - Runs `./scripts/security_check.sh`
+   - Bandit + Safety scans (non-blocking warnings)
+   
+3. **📊 Summary Job**: 
+   - Aggregates results from all jobs
+   - Provides clear pass/fail status
 
-**Key Features**:
-- **Coverage Reporting**: Codecov integration with PR comments
-- **Artifact Management**: 30-day retention of coverage reports
-- **Container-First**: Docker tests match production environment exactly
-- **Fail-Fast**: Unit tests must pass before Docker tests run
+**Local Replication**:
+```bash
+# Run exactly what CI runs
+./scripts/run_tests.sh --all      # All tests
+./scripts/coverage_check.sh        # Coverage analysis
+./scripts/security_check.sh        # Security scans
+```
+
+**Key Benefits**:
+- **Single Source of Truth**: Scripts define test behavior
+- **Easy Debugging**: Run CI commands locally
+- **Maintainable**: Update scripts, not workflow files
+- **Consistent**: Same behavior locally and in CI
 
 ### Coverage Reporting
 

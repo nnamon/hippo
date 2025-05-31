@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run all tests
+      run: |
+        ./scripts/run_tests.sh --all
+      
+    - name: Run coverage analysis
+      run: |
+        # Build test container if needed
+        docker build -f Dockerfile.test -t hippo-test:latest .
+        
+        # Run tests with coverage
+        docker run --rm -v "$PWD:/output" hippo-test:latest \
+          pytest tests/ -v --tb=short \
+          --cov=src --cov-report=xml:/output/coverage.xml \
+          --cov-report=json:/output/coverage.json \
+          --cov-fail-under=55 --cov-branch
+    
+    - name: Generate coverage comment
+      if: github.event_name == 'pull_request'
+      run: |
+        # Use the test container to generate comment
+        docker run --rm -v "$PWD:/app" -w /app hippo-test:latest \
+          python scripts/generate_coverage_comment.py > coverage_comment.md
+        cat coverage_comment.md
+    
+    - name: Post coverage comment
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const coverageComment = fs.readFileSync('coverage_comment.md', 'utf8');
+          
+          // Find existing coverage comment
+          const comments = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          
+          const botComment = comments.data.find(comment => 
+            comment.user.type === 'Bot' && comment.body.includes('Coverage Report')
+          );
+          
+          if (botComment) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: coverageComment
+            });
+          } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: coverageComment
+            });
+          }
+
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Run security checks
+      run: |
+        pip install bandit safety
+        ./scripts/security_check.sh
+      continue-on-error: true
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    if: always()
+    
+    steps:
+    - name: Test Results Summary
+      run: |
+        echo "## CI Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Tests & Coverage | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Security Scan | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.test.result }}" == "failure" ]; then
+          echo "❌ Tests or coverage check failed." >> $GITHUB_STEP_SUMMARY
+          exit 1
+        else
+          echo "✅ All checks passed!" >> $GITHUB_STEP_SUMMARY
+        fi
