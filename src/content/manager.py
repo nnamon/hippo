@@ -17,6 +17,7 @@ class ContentManager:
         """Initialize the content manager."""
         self.themes = self._load_themes()
         self.fallback_poems = self._load_poems()  # Renamed for clarity
+        self.fallback_quotes = self._load_fallback_quotes()
         self.confirmation_messages = self._load_confirmation_messages()
         self.recent_poems = []  # Track recently used poems to avoid repetition
         
@@ -24,6 +25,13 @@ class ContentManager:
         self.poem_cache = []  # Cache of fetched poems from PoetryDB
         self.cache_size = 20  # Number of poems to keep in cache
         self.poetrydb_url = "https://poetrydb.org/random,linecount/{};4"
+        
+        # Inspirational quotes system
+        self.quote_cache = []  # Cache of fetched quotes from ZenQuotes
+        self.quote_cache_size = 30  # Number of quotes to keep in cache
+        self.zenquotes_url = "https://zenquotes.io/api/quotes"
+        self.recent_quotes = []  # Track recently used quotes to avoid repetition
+        
         self.api_timeout = 5.0  # 5 second timeout for API calls
         self.logger = logging.getLogger(__name__)
     
@@ -127,6 +135,26 @@ class ContentManager:
             "🌸 *Cherry Blossom Dreams*\n\nPetals fall like drops of dew,\nNature's message straight to you:\nBeauty comes from being well,\nLet hydration cast its spell! 🌺",
             
             "🎵 *Rhythm & Hydration*\n\nTap your feet to water's beat,\nMake your wellness feel complete.\nDance with health throughout the day,\nLet hydration lead the way! 💃"
+        ]
+    
+    def _load_fallback_quotes(self) -> List[str]:
+        """Load fallback inspirational quotes for when API is unavailable."""
+        return [
+            "✨ *\"The best time to plant a tree was 20 years ago. The second best time is now.\"*\n\n— _Chinese Proverb_",
+            "✨ *\"Success is not final, failure is not fatal: it is the courage to continue that counts.\"*\n\n— _Winston Churchill_",
+            "✨ *\"The only way to do great work is to love what you do.\"*\n\n— _Steve Jobs_",
+            "✨ *\"Life is what happens to you while you're busy making other plans.\"*\n\n— _John Lennon_",
+            "✨ *\"The future belongs to those who believe in the beauty of their dreams.\"*\n\n— _Eleanor Roosevelt_",
+            "✨ *\"It is during our darkest moments that we must focus to see the light.\"*\n\n— _Aristotle_",
+            "✨ *\"The way to get started is to quit talking and begin doing.\"*\n\n— _Walt Disney_",
+            "✨ *\"Don't let yesterday take up too much of today.\"*\n\n— _Will Rogers_",
+            "✨ *\"You learn more from failure than from success. Don't let it stop you.\"*\n\n— _Unknown_",
+            "✨ *\"It's not whether you get knocked down, it's whether you get up.\"*\n\n— _Vince Lombardi_",
+            "✨ *\"If you are working on something that you really care about, you don't have to be pushed.\"*\n\n— _Steve Jobs_",
+            "✨ *\"Believe you can and you're halfway there.\"*\n\n— _Theodore Roosevelt_",
+            "✨ *\"The only impossible journey is the one you never begin.\"*\n\n— _Tony Robbins_",
+            "✨ *\"In the midst of winter, I found there was, within me, an invincible summer.\"*\n\n— _Albert Camus_",
+            "✨ *\"Every moment is a fresh beginning.\"*\n\n— _T.S. Eliot_"
         ]
     
     def _load_confirmation_messages(self) -> Dict[str, List[str]]:
@@ -267,12 +295,50 @@ class ContentManager:
             self.logger.warning(f"Failed to fetch poems from PoetryDB: {e}")
             return []
     
+    async def _fetch_quotes_from_api(self) -> List[str]:
+        """Fetch inspirational quotes from ZenQuotes API."""
+        try:
+            async with httpx.AsyncClient(timeout=self.api_timeout) as client:
+                response = await client.get(self.zenquotes_url)
+                response.raise_for_status()
+                
+                quotes_data = response.json()
+                formatted_quotes = []
+                
+                for quote_data in quotes_data:
+                    if quote_data.get('q') and quote_data.get('a'):
+                        # Format quote with emoji and proper attribution
+                        quote_text = quote_data['q'].strip()
+                        author = quote_data['a'].strip()
+                        
+                        # Skip quotes that are too long (over 200 characters)
+                        if len(quote_text) > 200:
+                            continue
+                            
+                        # Add inspirational emoji
+                        formatted_quote = f"✨ *\"{quote_text}\"*\n\n— _{author}_"
+                        formatted_quotes.append(formatted_quote)
+                
+                self.logger.info(f"Successfully fetched {len(formatted_quotes)} quotes from ZenQuotes")
+                return formatted_quotes
+                
+        except Exception as e:
+            self.logger.warning(f"Failed to fetch quotes from ZenQuotes: {e}")
+            return []
+    
     async def _replenish_poem_cache(self):
         """Replenish the poem cache when it's running low."""
         if len(self.poem_cache) < 5:  # Replenish when cache is low
             new_poems = await self._fetch_poems_from_api(self.cache_size)
             self.poem_cache.extend(new_poems)
             self.logger.info(f"Replenished poem cache. Now has {len(self.poem_cache)} poems")
+    
+    async def _replenish_quote_cache(self):
+        """Replenish the quote cache when it's running low."""
+        if len(self.quote_cache) < 10:  # Replenish when cache is low
+            new_quotes = await self._fetch_quotes_from_api()
+            self.quote_cache.extend(new_quotes)
+            self.logger.info(f"Replenished quote cache. Now has {len(self.quote_cache)} quotes")
     
     async def get_random_poem_async(self) -> str:
         """Get a random poem (async version) - tries API first, falls back to hardcoded."""
@@ -333,6 +399,65 @@ class ContentManager:
             # Fallback to hardcoded poems
             return self._get_fallback_poem()
     
+    async def get_random_quote_async(self) -> str:
+        """Get a random inspirational quote (async version) - tries API first, falls back to hardcoded."""
+        try:
+            # Try to replenish cache if needed
+            await self._replenish_quote_cache()
+            
+            # Use cached quote if available
+            if self.quote_cache:
+                # Remove quote from cache to avoid repetition
+                quote = self.quote_cache.pop(0)
+                return quote
+            
+        except Exception as e:
+            self.logger.warning(f"Error with dynamic quote system: {e}")
+        
+        # Fallback to hardcoded quotes
+        self.logger.info("Using fallback quotes")
+        return self._get_fallback_quote()
+    
+    def _get_fallback_quote(self) -> str:
+        """Get a quote from the fallback collection."""
+        # If we've used more than half the quotes, reset to allow all again
+        if len(self.recent_quotes) >= len(self.fallback_quotes) // 2:
+            self.recent_quotes = self.recent_quotes[-3:]  # Keep only last 3
+        
+        # Get available quotes (not recently used)
+        available_quotes = [quote for quote in self.fallback_quotes if quote not in self.recent_quotes]
+        
+        # If somehow all quotes are recent (shouldn't happen), use all quotes
+        if not available_quotes:
+            available_quotes = self.fallback_quotes
+        
+        # Select a random quote from available ones
+        selected_quote = random.choice(available_quotes)
+        
+        # Track this quote as recently used
+        self.recent_quotes.append(selected_quote)
+        
+        return selected_quote
+    
+    def get_random_quote(self) -> str:
+        """Get a random inspirational quote (sync wrapper) - tries API first, falls back to hardcoded."""
+        try:
+            # Try to run the async version
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We're in an async context, create a new task
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.get_random_quote_async())
+                    return future.result(timeout=self.api_timeout + 1)
+            else:
+                # We can run async directly
+                return asyncio.run(self.get_random_quote_async())
+        except Exception as e:
+            self.logger.warning(f"Failed to get dynamic quote: {e}")
+            # Fallback to hardcoded quotes
+            return self._get_fallback_quote()
+    
     def get_image_for_hydration_level(self, level: int, theme: str = "bluey") -> str:
         """Get image filename for the given hydration level and theme."""
         if theme not in self.themes:
@@ -356,9 +481,9 @@ class ContentManager:
         return random.choice(self.confirmation_messages[category])
     
     def get_reminder_content(self, hydration_level: int, theme: str = "bluey") -> Dict[str, Any]:
-        """Get complete reminder content (poem + image) for a user."""
+        """Get complete reminder content (quote + image) for a user."""
         return {
-            "poem": self.get_random_poem(),
+            "quote": self.get_random_quote(),
             "image": self.get_image_for_hydration_level(hydration_level, theme),
             "hydration_level": hydration_level
         }

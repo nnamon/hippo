@@ -204,8 +204,9 @@ class ReminderSystem:
             ]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            # Prepare message text with stats
-            message_text = f"{content['poem']}\n\n"
+            # Prepare message text with inspirational quote and stats
+            message_text = f"🦛 **Time for a Hydration Break!**\n\n"
+            message_text += f"{content['quote']}\n\n"
             message_text += f"📊 **Your Status:**\n"
             message_text += f"• Current level: {level_descriptions[hydration_level]}\n"
             message_text += f"• Today: {stats['confirmed']}✅ {stats['missed']}❌"

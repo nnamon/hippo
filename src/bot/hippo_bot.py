@@ -437,12 +437,34 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
                 "🤩 Perfect hydration"
             ]
             
+            # Extract the original inspirational quote from the message
+            original_quote = ""
+            try:
+                if query.message.caption:
+                    message_text = query.message.caption
+                else:
+                    message_text = query.message.text or ""
+                
+                # Look for the quote pattern (text between the header and status section)
+                import re
+                quote_pattern = r'🦛 \*\*Time for a Hydration Break!\*\*\n\n(.*?)\n\n📊 \*\*Your Status:'
+                quote_match = re.search(quote_pattern, message_text, re.DOTALL)
+                if quote_match:
+                    original_quote = quote_match.group(1).strip()
+            except Exception as e:
+                logger.warning(f"Could not extract original quote: {e}")
+            
             # Get appropriate response message and a celebratory poem
             confirmation_message = self.content_manager.get_confirmation_message(hydration_level)
             celebration_poem = self.content_manager.get_random_poem()
             
-            # Build enhanced confirmation message with updated stats
-            response_text = f"✅ **Great!** {confirmation_message}\n\n"
+            # Build enhanced confirmation message with original quote retained and poem added
+            response_text = f"✅ **Excellent!** {confirmation_message}\n\n"
+            
+            # Include the original inspirational quote if we found it
+            if original_quote:
+                response_text += f"💭 **Your Inspiration:**\n{original_quote}\n\n"
+            
             response_text += f"📊 **Updated Status:**\n"
             response_text += f"• Current level: {level_descriptions[hydration_level]}\n"
             response_text += f"• Today: {daily_stats['confirmed']}✅ {daily_stats['missed']}❌"
@@ -458,8 +480,8 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             else:
                 response_text += "🌱 Every sip counts! You're on the right track!\n\n"
             
-            # Add a celebratory poem
-            response_text += f"🎉 **Here's a little celebration poem for you:**\n\n{celebration_poem}"
+            # Add a celebratory poem as a reward
+            response_text += f"🎉 **Here's a celebration poem just for you:**\n\n{celebration_poem}"
             
             # Get the updated image for the new hydration level
             updated_image_path = self.content_manager.get_image_for_hydration_level(hydration_level, theme)
