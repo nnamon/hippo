@@ -30,5 +30,8 @@ RUN useradd -m -u 1000 hippo && \
 
 USER hippo
 
-# Default command runs tests
-CMD ["pytest", "tests/", "-v", "--tb=short", "--cov=src", "--cov-report=term-missing"]
+# Create a test runner script that forces clean exit
+RUN echo '#!/usr/bin/env python3\nimport sys\nimport os\nimport pytest\n\nif __name__ == "__main__":\n    # Run pytest with all arguments\n    exit_code = pytest.main(["-v", "--tb=short", "--cov=src", "--cov-report=term-missing", "tests/"])\n    # Force exit to avoid threading shutdown issues\n    os._exit(exit_code)' > /app/run_tests.py && chmod +x /app/run_tests.py
+
+# Default command runs tests via our script
+CMD ["python", "/app/run_tests.py"]

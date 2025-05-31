@@ -26,7 +26,19 @@ def event_loop():
     """Create an instance of the default event loop for the test session."""
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
-    loop.close()
+    
+    # Cancel all remaining tasks before closing
+    try:
+        pending = asyncio.all_tasks(loop)
+        if pending:
+            for task in pending:
+                task.cancel()
+            # Wait for tasks to be cancelled
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    except Exception:
+        pass
+    finally:
+        loop.close()
 
 
 @pytest_asyncio.fixture
@@ -48,7 +60,18 @@ async def temp_db():
 @pytest.fixture
 def content_manager():
     """Create a content manager instance."""
-    return ContentManager()
+    manager = ContentManager()
+    yield manager
+    
+    # Clear any cached connections
+    try:
+        # Clear any async caches that might hold references
+        manager.poem_cache.clear()
+        manager.quote_cache.clear()
+        manager.recent_poems.clear()
+        manager.recent_quotes.clear()
+    except Exception:
+        pass
 
 
 @pytest_asyncio.fixture

@@ -402,14 +402,14 @@ class ContentManager:
         """Get a random poem (sync wrapper) - tries API first, falls back to hardcoded."""
         try:
             # Try to run the async version
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
+            try:
+                loop = asyncio.get_running_loop()
                 # We're already in an async context, so we can't use asyncio.run
                 # Just use the fallback directly to avoid deadlock
                 self.logger.info("Using fallback poems (called from async context)")
                 return self._get_fallback_poem()
-            else:
-                # We can run async directly
+            except RuntimeError:
+                # No running loop, we can safely use asyncio.run
                 return asyncio.run(self.get_random_poem_async())
         except Exception as e:
             self.logger.warning(f"Failed to get dynamic poem: {e}")
@@ -460,14 +460,14 @@ class ContentManager:
         """Get a random inspirational quote (sync wrapper) - tries API first, falls back to hardcoded."""
         try:
             # Try to run the async version
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
+            try:
+                loop = asyncio.get_running_loop()
                 # We're already in an async context, so we can't use asyncio.run
                 # Just use the fallback directly to avoid deadlock
                 self.logger.info("Using fallback quotes (called from async context)")
                 return self._get_fallback_quote()
-            else:
-                # We can run async directly
+            except RuntimeError:
+                # No running loop, we can safely use asyncio.run
                 return asyncio.run(self.get_random_quote_async())
         except Exception as e:
             self.logger.warning(f"Failed to get dynamic quote: {e}")

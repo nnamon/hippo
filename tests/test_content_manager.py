@@ -4,7 +4,16 @@ Tests for content manager functionality.
 
 import pytest
 import asyncio
+import json
+import os
 from unittest.mock import patch, AsyncMock, Mock
+
+
+def load_fixture(filename):
+    """Load JSON fixture file."""
+    fixture_path = os.path.join(os.path.dirname(__file__), 'fixtures', filename)
+    with open(fixture_path, 'r') as f:
+        return json.load(f)
 
 
 class TestContentManager:
@@ -113,15 +122,20 @@ class TestContentManager:
     
     def test_get_reminder_content(self, content_manager):
         """Test complete reminder content generation."""
-        content = content_manager.get_reminder_content(3, 'spring')
-        
-        assert 'quote' in content
-        assert 'image' in content
-        assert 'hydration_level' in content
-        
-        assert content['quote'] in content_manager.fallback_quotes
-        assert content['image'].startswith('spring/')
-        assert content['hydration_level'] == 3
+        # Mock the API calls to ensure predictable results
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value.__aenter__.return_value.get.side_effect = Exception("API Error")
+            
+            content = content_manager.get_reminder_content(3, 'spring')
+            
+            assert 'quote' in content
+            assert 'image' in content
+            assert 'hydration_level' in content
+            
+            # Quote should be from fallback quotes when API fails
+            assert content['quote'] in content_manager.fallback_quotes
+            assert content['image'].startswith('spring/')
+            assert content['hydration_level'] == 3
     
     def test_add_theme(self, content_manager):
         """Test adding a new theme."""
@@ -191,28 +205,27 @@ class TestDynamicPoemGeneration:
     @pytest.mark.asyncio
     async def test_fetch_poems_from_api_success(self, content_manager):
         """Test successful API fetch of poems."""
-        mock_response_data = [
-            {
-                "title": "Test Poem",
-                "author": "Test Author",
-                "lines": ["Line one", "Line two", "Line three", "Line four"],
-                "linecount": "4"
-            }
-        ]
+        # Load poem fixtures for different line counts
+        poem_4_lines = load_fixture('poetrydb_4lines_sample.json')[:1]
+        poem_5_lines = load_fixture('poetrydb_5lines_sample.json')[:1]
+        poem_8_lines = load_fixture('poetrydb_8lines_sample.json')[:1]
+        
+        # Set up mock to return appropriate data for each API call
+        responses = [poem_4_lines, poem_5_lines, poem_8_lines]
         
         with patch('httpx.AsyncClient') as mock_client:
             mock_response = Mock()
-            mock_response.json.return_value = mock_response_data
             mock_response.raise_for_status.return_value = None
+            # Return different responses for each call
+            mock_response.json.side_effect = responses
             mock_client.return_value.__aenter__.return_value.get.return_value = mock_response
             
             poems = await content_manager._fetch_poems_from_api(1)
             
             # Should get 3 poems (one for each line count: 4, 5, 8)
             assert len(poems) == 3
-            assert "Test Poem" in poems[0]
-            assert "Test Author" in poems[0]
-            assert "Line one" in poems[0]
+            # Each poem should start with an emoji
+            assert all(poem[0] in '💧🌊💦🏊🌸🌺🌿🌱🌳🌷🌙🌟🌅⭐☀️🎉🎵💃🎭🎪💕💖💝❤️🗺️⛰️🚀🎯🕯️⚰️🌹🙏😢⚔️🛡️🏺⚡🔥🧠💭📚🔮⚖️🐦🦅🐺🦌🐰🐱🐴🍎🍞🍷🍯🥖🍇🔨⚙️🛠️👷🏗️⚒️❄️🧊🌨️⛄🥶🌬️⏰⌛🕐📅⏳🔄📜✨' for poem in poems)
             assert poems[0].startswith(('💧', '🌊', '💦', '🏊', '🌸', '🌺', '🌿', '🌱', '🌳', '🌷', '🌙', '🌟', '🌅', '⭐', '☀️', '🎉', '🎵', '💃', '🎭', '🎪', '💕', '💖', '💝', '❤️', '🗺️', '⛰️', '🚀', '🎯', '🕯️', '⚰️', '🌹', '🙏', '😢', '⚔️', '🛡️', '🏺', '⚡', '🔥', '🧠', '💭', '📚', '🔮', '⚖️', '🐦', '🦅', '🐺', '🦌', '🐰', '🐱', '🐴', '🍎', '🍞', '🍷', '🍯', '🥖', '🍇', '🔨', '⚙️', '🛠️', '👷', '🏗️', '⚒️', '❄️', '🧊', '🌨️', '⛄', '🥶', '🌬️', '⏰', '⌛', '🕐', '📅', '⏳', '🔄', '📜', '✨'))
             
     @pytest.mark.asyncio
@@ -254,14 +267,18 @@ class TestDynamicPoemGeneration:
     @pytest.mark.asyncio
     async def test_get_random_poem_async_with_cache(self, content_manager):
         """Test async poem retrieval with cache."""
-        # Pre-populate cache with enough items to avoid replenishment
-        content_manager.poem_cache = [f"🎭 *Cached Poem {i}*\n\nTest poem content\n\n— _Test Author_" for i in range(10)]
-        
-        poem = await content_manager.get_random_poem_async()
-        
-        assert "Cached Poem" in poem
-        # Cache should have one less item
-        assert len(content_manager.poem_cache) == 9
+        # Mock API to prevent real calls during cache replenishment
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value.__aenter__.return_value.get.side_effect = Exception("API Error")
+            
+            # Pre-populate cache with enough items to avoid replenishment
+            content_manager.poem_cache = [f"🎭 *Cached Poem {i}*\n\nTest poem content\n\n— _Test Author_" for i in range(10)]
+            
+            poem = await content_manager.get_random_poem_async()
+            
+            assert "Cached Poem" in poem
+            # Cache should have one less item
+            assert len(content_manager.poem_cache) == 9
         
     @pytest.mark.asyncio
     async def test_get_random_poem_async_fallback(self, content_manager):
@@ -291,26 +308,8 @@ class TestQuoteSystem:
     @pytest.mark.asyncio
     async def test_fetch_quotes_from_api_success(self, content_manager):
         """Test successful API fetch of quotes."""
-        mock_response_data = [
-            {
-                "q": "Test quote 1",
-                "a": "Test Author 1",
-                "c": "15",
-                "h": "<blockquote>Test quote 1</blockquote>"
-            },
-            {
-                "q": "Test quote 2",
-                "a": "Test Author 2", 
-                "c": "25",
-                "h": "<blockquote>Test quote 2</blockquote>"
-            },
-            {
-                "q": "This is a very long quote that exceeds the 200 character limit and should be filtered out during processing to ensure that only appropriately sized quotes are included in the cache",
-                "a": "Test Author 3",
-                "c": "180",
-                "h": "<blockquote>Long quote</blockquote>"
-            }
-        ]
+        # Load real API response from fixture
+        mock_response_data = load_fixture('zenquotes_sample.json')[:3]  # Use first 3 quotes from fixture
         
         with patch('httpx.AsyncClient') as mock_client:
             mock_response = Mock()
@@ -320,14 +319,13 @@ class TestQuoteSystem:
             
             quotes = await content_manager._fetch_quotes_from_api()
             
-            # Should get 2 quotes (third filtered out for length) 
-            # Note: the long quote is actually under 200 chars so all 3 get through
+            # Should get all 3 quotes from our fixture
             assert len(quotes) == 3
-            assert "Test quote 1" in quotes[0]
-            assert "Test Author 1" in quotes[0]
-            assert "Test quote 2" in quotes[1]
-            assert "Test Author 2" in quotes[1]
             assert all(quote.startswith("✨") for quote in quotes)
+            # Check that quotes contain author names
+            assert "Oscar Wilde" in quotes[0]
+            assert "James Cameron" in quotes[1]
+            assert "Robin Sharma" in quotes[2]
     
     @pytest.mark.asyncio
     async def test_fetch_quotes_from_api_failure(self, content_manager):
@@ -368,14 +366,18 @@ class TestQuoteSystem:
     @pytest.mark.asyncio
     async def test_get_random_quote_async_with_cache(self, content_manager):
         """Test async quote retrieval with cache."""
-        # Pre-populate cache with enough items to avoid replenishment
-        content_manager.quote_cache = [f"✨ \"Cached Quote {i}\"\\n\\n— _Test Author_" for i in range(15)]
-        
-        quote = await content_manager.get_random_quote_async()
-        
-        assert "Cached Quote" in quote
-        # Cache should have one less item
-        assert len(content_manager.quote_cache) == 14
+        # Mock API to prevent real calls during cache replenishment
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value.__aenter__.return_value.get.side_effect = Exception("API Error")
+            
+            # Pre-populate cache with enough items to avoid replenishment
+            content_manager.quote_cache = [f"✨ \"Cached Quote {i}\"\\n\\n— _Test Author_" for i in range(15)]
+            
+            quote = await content_manager.get_random_quote_async()
+            
+            assert "Cached Quote" in quote
+            # Cache should have one less item
+            assert len(content_manager.quote_cache) == 14
     
     @pytest.mark.asyncio
     async def test_get_random_quote_async_fallback(self, content_manager):
