@@ -160,7 +160,9 @@ tests/                      # Comprehensive test suite
 scripts/
 ├── integration_test.py        # Integration test suite 
 ├── run_tests.sh              # Main test runner script (Docker-based)
-└── generate_coverage_comment.py # Coverage PR comment generator
+├── generate_coverage_comment.py # Coverage PR comment generator
+├── debug_database.py         # Database debug and analysis tool
+└── debug.sh                  # Convenient debug wrapper script
 .github/workflows/          # CI/CD automation
 ├── test.yml               # Main testing workflow
 └── pr-checks.yml          # Quick PR validation
@@ -182,6 +184,41 @@ COVERAGE.md                # Coverage documentation and guidelines
 - Copy `config.env.example` to `config.env` and add your Telegram bot token
 - Bot token obtained from @BotFather on Telegram
 - Database file (`hippo.db`) created automatically on first run
+
+## Debugging and Monitoring
+
+### Database Debug Tools
+
+The project includes comprehensive database debugging tools for troubleshooting and monitoring:
+
+**Quick Debug (Recommended):**
+```bash
+./scripts/debug.sh
+```
+
+**Manual Debug:**
+```bash
+# From host with mounted volume
+DATABASE_PATH=./data/hippo.db python scripts/debug_database.py
+
+# From inside Docker container (after rebuild)
+docker exec hippo-water-bot python scripts/debug_database.py
+```
+
+**Debug Output Includes:**
+- 🗄️ **Database Information**: File size, location, record counts
+- 👥 **User Details**: All registered users with settings and status
+- 📊 **User Statistics**: Success rates, event counts, last activity
+- 🌊 **Hydration Levels**: Current hydration status for all users
+- ⏰ **Active Reminders**: Outstanding reminders and expiration status
+- 💧 **Recent Events**: Last 50 hydration events (confirmed/missed)
+
+**Use Cases:**
+- Monitor bot health and user engagement
+- Troubleshoot reminder delivery issues
+- Analyze user hydration patterns
+- Identify expired or stuck reminders
+- Verify database persistence after container restarts
 
 ## Development Workflow
 
