@@ -29,12 +29,25 @@ jobs:
         # Build test container if needed
         docker build -f Dockerfile.test -t hippo-test:latest .
         
-        # Run tests with coverage
-        docker run --rm -v "$PWD:/output" hippo-test:latest \
-          pytest tests/ -v --tb=short \
-          --cov=src --cov-report=xml:/output/coverage.xml \
-          --cov-report=json:/output/coverage.json \
-          --cov-fail-under=55 --cov-branch
+        # Run tests with coverage, using the container's built-in test runner
+        # which already has os._exit() to prevent hanging
+        docker run --rm -v "$PWD:/output" -e COVERAGE_FILE=/output/.coverage hippo-test:latest \
+          python -c "
+import sys
+import os
+import pytest
+
+exit_code = pytest.main([
+    '-v', '--tb=short',
+    '--cov=src',
+    '--cov-report=xml:/output/coverage.xml',
+    '--cov-report=json:/output/coverage.json',
+    '--cov-fail-under=55',
+    '--cov-branch',
+    'tests/'
+])
+os._exit(exit_code)
+"
     
     - name: Generate coverage comment
       if: github.event_name == 'pull_request'
