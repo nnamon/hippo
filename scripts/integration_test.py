@@ -158,7 +158,7 @@ async def test_dynamic_poem_generation():
     # Test cache initialization
     assert hasattr(content_manager, 'poem_cache'), "Should have poem cache"
     assert hasattr(content_manager, 'cache_size'), "Should have cache size"
-    assert content_manager.cache_size == 20, "Cache size should be 20"
+    assert content_manager.cache_size == 30, "Cache size should be 30"
     
     print("✅ Dynamic poem generation test passed")
 
