@@ -515,8 +515,3 @@ class ContentManager:
     def get_available_themes(self) -> List[str]:
         """Get list of available theme names."""
         return list(self.themes.keys())
-    
-
-
-# Create a global instance for easy access
-content_manager = ContentManager()
