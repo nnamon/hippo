@@ -402,6 +402,9 @@ class TestQuoteSystem:
     
     def test_get_fallback_quote_repetition_avoidance(self, content_manager):
         """Test that recent quotes are avoided in fallback mode."""
+        # Clear any existing recent quotes to ensure clean state
+        content_manager.recent_quotes = []
+        
         # Get half the fallback quotes to trigger reset
         quotes_gotten = []
         for _ in range(8):  # Half of 15 fallback quotes

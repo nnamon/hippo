@@ -61,6 +61,11 @@ async def temp_db():
 def content_manager():
     """Create a content manager instance."""
     manager = ContentManager()
+    # Ensure clean state for each test
+    manager.poem_cache.clear()
+    manager.quote_cache.clear()
+    manager.recent_poems.clear()
+    manager.recent_quotes.clear()
     yield manager
     
     # Clear any cached connections
