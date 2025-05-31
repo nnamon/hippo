@@ -140,21 +140,21 @@ class ContentManager:
     def _load_fallback_quotes(self) -> List[str]:
         """Load fallback inspirational quotes for when API is unavailable."""
         return [
-            "✨ *\"The best time to plant a tree was 20 years ago. The second best time is now.\"*\n\n— _Chinese Proverb_",
-            "✨ *\"Success is not final, failure is not fatal: it is the courage to continue that counts.\"*\n\n— _Winston Churchill_",
-            "✨ *\"The only way to do great work is to love what you do.\"*\n\n— _Steve Jobs_",
-            "✨ *\"Life is what happens to you while you're busy making other plans.\"*\n\n— _John Lennon_",
-            "✨ *\"The future belongs to those who believe in the beauty of their dreams.\"*\n\n— _Eleanor Roosevelt_",
-            "✨ *\"It is during our darkest moments that we must focus to see the light.\"*\n\n— _Aristotle_",
-            "✨ *\"The way to get started is to quit talking and begin doing.\"*\n\n— _Walt Disney_",
-            "✨ *\"Don't let yesterday take up too much of today.\"*\n\n— _Will Rogers_",
-            "✨ *\"You learn more from failure than from success. Don't let it stop you.\"*\n\n— _Unknown_",
-            "✨ *\"It's not whether you get knocked down, it's whether you get up.\"*\n\n— _Vince Lombardi_",
-            "✨ *\"If you are working on something that you really care about, you don't have to be pushed.\"*\n\n— _Steve Jobs_",
-            "✨ *\"Believe you can and you're halfway there.\"*\n\n— _Theodore Roosevelt_",
-            "✨ *\"The only impossible journey is the one you never begin.\"*\n\n— _Tony Robbins_",
-            "✨ *\"In the midst of winter, I found there was, within me, an invincible summer.\"*\n\n— _Albert Camus_",
-            "✨ *\"Every moment is a fresh beginning.\"*\n\n— _T.S. Eliot_"
+            "✨ \"The best time to plant a tree was 20 years ago. The second best time is now.\"\n\n— _Chinese Proverb_",
+            "✨ \"Success is not final, failure is not fatal: it is the courage to continue that counts.\"\n\n— _Winston Churchill_",
+            "✨ \"The only way to do great work is to love what you do.\"\n\n— _Steve Jobs_",
+            "✨ \"Life is what happens to you while you're busy making other plans.\"\n\n— _John Lennon_",
+            "✨ \"The future belongs to those who believe in the beauty of their dreams.\"\n\n— _Eleanor Roosevelt_",
+            "✨ \"It is during our darkest moments that we must focus to see the light.\"\n\n— _Aristotle_",
+            "✨ \"The way to get started is to quit talking and begin doing.\"\n\n— _Walt Disney_",
+            "✨ \"Don't let yesterday take up too much of today.\"\n\n— _Will Rogers_",
+            "✨ \"You learn more from failure than from success. Don't let it stop you.\"\n\n— _Unknown_",
+            "✨ \"It's not whether you get knocked down, it's whether you get up.\"\n\n— _Vince Lombardi_",
+            "✨ \"If you are working on something that you really care about, you don't have to be pushed.\"\n\n— _Steve Jobs_",
+            "✨ \"Believe you can and you're halfway there.\"\n\n— _Theodore Roosevelt_",
+            "✨ \"The only impossible journey is the one you never begin.\"\n\n— _Tony Robbins_",
+            "✨ \"In the midst of winter, I found there was, within me, an invincible summer.\"\n\n— _Albert Camus_",
+            "✨ \"Every moment is a fresh beginning.\"\n\n— _T.S. Eliot_"
         ]
     
     def _load_confirmation_messages(self) -> Dict[str, List[str]]:
@@ -316,7 +316,7 @@ class ContentManager:
                             continue
                             
                         # Add inspirational emoji
-                        formatted_quote = f"✨ *\"{quote_text}\"*\n\n— _{author}_"
+                        formatted_quote = f"✨ \"{quote_text}\"\n\n— _{author}_"
                         formatted_quotes.append(formatted_quote)
                 
                 self.logger.info(f"Successfully fetched {len(formatted_quotes)} quotes from ZenQuotes")
