@@ -59,8 +59,10 @@ class HippoBot:
     
     async def _post_init(self, application):
         """Initialize components after the application starts."""
-        # Initialize database
-        self.database = DatabaseManager()
+        # Initialize database with path from environment or default
+        import os
+        db_path = os.getenv('DATABASE_PATH', 'hippo.db')
+        self.database = DatabaseManager(db_path)
         await self.database.initialize()
         
         # Initialize content manager
@@ -385,11 +387,27 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             await query.edit_message_text("Unknown button action")
     
     async def _handle_water_confirmation(self, query):
-        """Handle water drinking confirmation."""
+        """Handle water drinking confirmation with two-phase update for better UX."""
         try:
             # Extract reminder ID from callback data
             reminder_id = query.data.replace("confirm_water_", "")
             user_id = query.from_user.id
+            
+            # PHASE 1: Immediate text-only update for instant feedback
+            try:
+                immediate_text = "✅ **Great job!** Recording your water intake...\n\n🔄 Updating your hydration status..."
+                if query.message.photo:
+                    await query.edit_message_caption(
+                        caption=immediate_text,
+                        parse_mode='Markdown'
+                    )
+                else:
+                    await query.edit_message_text(
+                        immediate_text,
+                        parse_mode='Markdown'
+                    )
+            except Exception as immediate_error:
+                logger.warning(f"Could not provide immediate feedback: {immediate_error}")
             
             # Record the confirmation
             await self.database.record_hydration_event(user_id, 'confirmed', reminder_id)
@@ -447,7 +465,7 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             updated_image_path = self.content_manager.get_image_for_hydration_level(hydration_level, theme)
             full_image_path = f"assets/{updated_image_path}"
             
-            # Try to update the message with new image and text
+            # PHASE 2: Update with final content and image
             try:
                 # Check if original message has a photo
                 if query.message.photo:
