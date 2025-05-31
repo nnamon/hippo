@@ -1,11 +1,13 @@
 """
-Tests for bot command handlers.
+Tests for bot command handlers and initialization.
 """
 
 import pytest
 import pytest_asyncio
+import tempfile
+import os
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch, Mock
 from src.bot.hippo_bot import HippoBot
 
 
@@ -448,3 +450,241 @@ class TestNextReminderCalculation:
         args, kwargs = mock_callback_query.edit_message_text.call_args
         assert "Invalid Time Range" in args[0]
         assert "Start and end times cannot be the same" in args[0]
+
+
+class TestBotInitialization:
+    """Test bot initialization and lifecycle."""
+    
+    @pytest.mark.asyncio
+    async def test_post_init_with_environment_db_path(self):
+        """Test post initialization with environment database path."""
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp:
+            db_path = tmp.name
+        
+        try:
+            # Mock the environment variable
+            with patch.dict(os.environ, {'DATABASE_PATH': db_path}):
+                bot = HippoBot("test_token")
+                
+                # Mock application to avoid actual Telegram API calls
+                mock_app = Mock()
+                bot.application = mock_app
+                
+                # Mock job_queue
+                mock_job_queue = Mock()
+                bot.job_queue = mock_job_queue
+                
+                # Test post_init
+                await bot._post_init(mock_app)
+                
+                # Verify database was initialized with environment path
+                assert bot.database is not None
+                assert bot.content_manager is not None
+                assert bot.reminder_system is not None
+                
+                await bot.database.close()
+        finally:
+            if os.path.exists(db_path):
+                os.unlink(db_path)
+    
+    @pytest.mark.asyncio 
+    async def test_post_init_default_db_path(self):
+        """Test post initialization with default database path."""
+        bot = HippoBot("test_token")
+        
+        # Mock application to avoid actual Telegram API calls
+        mock_app = Mock()
+        bot.application = mock_app
+        
+        # Mock job_queue
+        mock_job_queue = Mock()
+        bot.job_queue = mock_job_queue
+        
+        # Test post_init
+        await bot._post_init(mock_app)
+        
+        # Verify components were initialized
+        assert bot.database is not None
+        assert bot.content_manager is not None
+        assert bot.reminder_system is not None
+        
+        # Verify jobs were scheduled
+        assert mock_job_queue.run_once.call_count == 2  # start_user_reminders + set_bot_commands
+        
+        await bot.database.close()
+    
+    @pytest.mark.asyncio
+    async def test_set_bot_commands_success(self):
+        """Test successful bot commands setup."""
+        bot = HippoBot("test_token")
+        
+        # Mock application and bot
+        mock_app = Mock()
+        mock_telegram_bot = AsyncMock()
+        mock_app.bot = mock_telegram_bot
+        bot.application = mock_app
+        
+        # Mock context
+        mock_context = Mock()
+        mock_context.job = Mock()
+        
+        # Test setting bot commands
+        await bot._set_bot_commands_delayed(mock_context)
+        
+        # Verify set_my_commands was called
+        mock_telegram_bot.set_my_commands.assert_called_once()
+        commands = mock_telegram_bot.set_my_commands.call_args[0][0]
+        
+        # Verify expected commands
+        command_names = [cmd.command for cmd in commands]
+        assert "start" in command_names
+        assert "setup" in command_names
+        assert "stats" in command_names
+        assert "poem" in command_names
+        assert "reset" in command_names
+        assert "help" in command_names
+    
+    @pytest.mark.asyncio
+    async def test_set_bot_commands_failure(self):
+        """Test bot commands setup failure handling."""
+        bot = HippoBot("test_token")
+        
+        # Mock application and bot to raise exception
+        mock_app = Mock()
+        mock_telegram_bot = AsyncMock()
+        mock_telegram_bot.set_my_commands.side_effect = Exception("API Error")
+        mock_app.bot = mock_telegram_bot
+        bot.application = mock_app
+        
+        # Mock context
+        mock_context = Mock()
+        mock_context.job = Mock()
+        
+        # Test setting bot commands with error (should not raise)
+        await bot._set_bot_commands_delayed(mock_context)
+        
+        # Verify set_my_commands was attempted
+        mock_telegram_bot.set_my_commands.assert_called_once()
+
+
+class TestErrorHandling:
+    """Test error handling in bot commands."""
+    
+    @pytest.mark.asyncio
+    async def test_poem_command_uninitialized_content_manager(self, mock_update, mock_context):
+        """Test poem command when content manager is not initialized."""
+        bot = HippoBot("test_token")
+        bot.content_manager = None  # Simulate uninitialized state
+        
+        mock_update.message.reply_text = AsyncMock()
+        
+        await bot.poem_command(mock_update, mock_context)
+        
+        # Should reply with error message
+        mock_update.message.reply_text.assert_called_once()
+        args = mock_update.message.reply_text.call_args[0]
+        assert "Bot is still starting up" in args[0]
+    
+    @pytest.mark.asyncio
+    async def test_poem_command_exception_handling(self, hippo_bot, mock_update, mock_context):
+        """Test poem command exception handling."""
+        mock_update.message.reply_text = AsyncMock()
+        
+        # Mock content manager to raise exception
+        with patch.object(hippo_bot.content_manager, 'get_random_poem_async', side_effect=Exception("Test error")):
+            await hippo_bot.poem_command(mock_update, mock_context)
+        
+        # Should reply with error message
+        mock_update.message.reply_text.assert_called_once()
+        args = mock_update.message.reply_text.call_args[0]
+        assert "couldn't fetch a poem" in args[0]
+    
+    @pytest.mark.asyncio
+    async def test_handle_message(self, hippo_bot, mock_update, mock_context):
+        """Test generic message handler."""
+        mock_update.message.reply_text = AsyncMock()
+        
+        await hippo_bot.handle_message(mock_update, mock_context)
+        
+        # Should reply with help message
+        mock_update.message.reply_text.assert_called_once()
+        args = mock_update.message.reply_text.call_args[0]
+        assert "I'm here to help you stay hydrated" in args[0]
+        assert "/help" in args[0]
+
+
+class TestWaterConfirmationEnhancements:
+    """Test enhanced water confirmation functionality."""
+    
+    @pytest.mark.asyncio
+    async def test_water_confirmation_immediate_feedback_error(self, hippo_bot, mock_callback_query):
+        """Test water confirmation when immediate feedback fails."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "confirm_water_test-reminder-id"
+        mock_callback_query.message.photo = [Mock()]  # Simulate photo message
+        
+        # Mock immediate feedback to fail
+        mock_callback_query.edit_message_caption.side_effect = Exception("Immediate feedback failed")
+        mock_callback_query.edit_message_media = AsyncMock()
+        
+        await hippo_bot._handle_water_confirmation(mock_callback_query)
+        
+        # Should still complete the confirmation despite immediate feedback failure
+        mock_callback_query.edit_message_media.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_water_confirmation_media_edit_fallback(self, hippo_bot, mock_callback_query):
+        """Test water confirmation media edit fallback scenarios."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "confirm_water_test-reminder-id"
+        mock_callback_query.message.photo = [Mock()]  # Simulate photo message
+        
+        # Mock media edit to fail, then caption edit to succeed
+        mock_callback_query.edit_message_media.side_effect = Exception("Media edit failed")
+        mock_callback_query.edit_message_caption = AsyncMock()
+        
+        await hippo_bot._handle_water_confirmation(mock_callback_query)
+        
+        # Should fallback to caption edit
+        mock_callback_query.edit_message_caption.assert_called()
+    
+    @pytest.mark.asyncio
+    async def test_water_confirmation_all_edits_fail(self, hippo_bot, mock_callback_query):
+        """Test water confirmation when all message edits fail."""
+        user_id = mock_callback_query.from_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        mock_callback_query.data = "confirm_water_test-reminder-id"
+        mock_callback_query.message.photo = [Mock()]
+        mock_callback_query.message.reply_text = AsyncMock()
+        
+        # Mock all edit methods to fail
+        mock_callback_query.edit_message_media.side_effect = Exception("Media edit failed")
+        mock_callback_query.edit_message_caption.side_effect = Exception("Caption edit failed")
+        mock_callback_query.edit_message_text.side_effect = Exception("Text edit failed")
+        
+        await hippo_bot._handle_water_confirmation(mock_callback_query)
+        
+        # Should fallback to new message
+        mock_callback_query.message.reply_text.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_water_confirmation_exception_handling(self, hippo_bot, mock_callback_query):
+        """Test water confirmation complete exception handling."""
+        mock_callback_query.data = "confirm_water_invalid-id"
+        mock_callback_query.from_user.id = 999999  # Non-existent user
+        mock_callback_query.edit_message_caption = AsyncMock()
+        mock_callback_query.edit_message_text = AsyncMock()
+        mock_callback_query.message.reply_text = AsyncMock()
+        
+        # This should handle the exception gracefully
+        await hippo_bot._handle_water_confirmation(mock_callback_query)
+        
+        # Should attempt to send error message
+        assert (mock_callback_query.edit_message_caption.called or 
+                mock_callback_query.edit_message_text.called or 
+                mock_callback_query.message.reply_text.called)
