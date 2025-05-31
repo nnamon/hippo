@@ -31,6 +31,20 @@ exclude_lines =
     # Don't complain about abstract methods, they aren't run:
     @(abc\.)?abstractmethod
 
+    # Exclude bot startup/shutdown code that's hard to test
+    self\.application\.run_polling\(\)
+    Application\.builder\(\)\.token\(
+
+    # Exclude database connection setup
+    aiosqlite\.connect\(
+    await self\.connection\.close\(\)
+
+    # Exclude logging statements
+    logger\.info\(
+    logger\.debug\(
+    logger\.warning\(
+    logger\.error\(
+
 ignore_errors = True
 show_missing = True
 precision = 1

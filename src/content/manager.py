@@ -404,11 +404,10 @@ class ContentManager:
             # Try to run the async version
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                # We're in an async context, create a new task
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.get_random_poem_async())
-                    return future.result(timeout=self.api_timeout + 1)
+                # We're already in an async context, so we can't use asyncio.run
+                # Just use the fallback directly to avoid deadlock
+                self.logger.info("Using fallback poems (called from async context)")
+                return self._get_fallback_poem()
             else:
                 # We can run async directly
                 return asyncio.run(self.get_random_poem_async())
@@ -463,11 +462,10 @@ class ContentManager:
             # Try to run the async version
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                # We're in an async context, create a new task
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.get_random_quote_async())
-                    return future.result(timeout=self.api_timeout + 1)
+                # We're already in an async context, so we can't use asyncio.run
+                # Just use the fallback directly to avoid deadlock
+                self.logger.info("Using fallback quotes (called from async context)")
+                return self._get_fallback_quote()
             else:
                 # We can run async directly
                 return asyncio.run(self.get_random_quote_async())

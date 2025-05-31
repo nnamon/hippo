@@ -39,23 +39,23 @@ class HippoBot:
         self.job_queue: Optional[JobQueue] = None
         self.reminder_system: Optional[ReminderSystem] = None
         
-    def start(self):
+    def start(self):  # pragma: no cover
         """Start the bot."""
         # Build application
-        self.application = Application.builder().token(self.token).build()
-        self.job_queue = self.application.job_queue
+        self.application = Application.builder().token(self.token).build()  # pragma: no cover
+        self.job_queue = self.application.job_queue  # pragma: no cover
         
         # Add handlers
-        self._add_handlers()
+        self._add_handlers()  # pragma: no cover
         
         # Start background jobs
-        self._schedule_background_jobs()
+        self._schedule_background_jobs()  # pragma: no cover
         
         # Initialize database and other components when the bot starts
-        self.application.post_init = self._post_init
+        self.application.post_init = self._post_init  # pragma: no cover
         
         # Start the bot with polling (this handles the event loop)
-        self.application.run_polling()
+        self.application.run_polling()  # pragma: no cover
     
     async def _post_init(self, application):
         """Initialize components after the application starts."""

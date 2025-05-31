@@ -254,14 +254,14 @@ class TestDynamicPoemGeneration:
     @pytest.mark.asyncio
     async def test_get_random_poem_async_with_cache(self, content_manager):
         """Test async poem retrieval with cache."""
-        # Pre-populate cache
-        content_manager.poem_cache = ["🎭 *Cached Poem*\n\nTest poem content\n\n— _Test Author_"]
+        # Pre-populate cache with enough items to avoid replenishment
+        content_manager.poem_cache = [f"🎭 *Cached Poem {i}*\n\nTest poem content\n\n— _Test Author_" for i in range(10)]
         
         poem = await content_manager.get_random_poem_async()
         
         assert "Cached Poem" in poem
-        # Cache should be replenished since it became empty (0 < 5 threshold)
-        assert len(content_manager.poem_cache) > 0
+        # Cache should have one less item
+        assert len(content_manager.poem_cache) == 9
         
     @pytest.mark.asyncio
     async def test_get_random_poem_async_fallback(self, content_manager):
@@ -368,14 +368,14 @@ class TestQuoteSystem:
     @pytest.mark.asyncio
     async def test_get_random_quote_async_with_cache(self, content_manager):
         """Test async quote retrieval with cache."""
-        # Pre-populate cache
-        content_manager.quote_cache = ["✨ \"Cached Quote\"\\n\\n— _Test Author_"]
+        # Pre-populate cache with enough items to avoid replenishment
+        content_manager.quote_cache = [f"✨ \"Cached Quote {i}\"\\n\\n— _Test Author_" for i in range(15)]
         
         quote = await content_manager.get_random_quote_async()
         
         assert "Cached Quote" in quote
-        # Cache should be replenished since it became empty (0 < 10 threshold)
-        assert len(content_manager.quote_cache) >= 0
+        # Cache should have one less item
+        assert len(content_manager.quote_cache) == 14
     
     @pytest.mark.asyncio
     async def test_get_random_quote_async_fallback(self, content_manager):
