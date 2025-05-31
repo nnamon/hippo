@@ -437,40 +437,14 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
                 "🤩 Perfect hydration"
             ]
             
-            # Extract the original inspirational quote from the message
-            original_quote = ""
-            try:
-                if query.message.caption:
-                    message_text = query.message.caption
-                else:
-                    message_text = query.message.text or ""
-                
-                # Look for the quote pattern (text between the header and status section)
-                import re
-                # Pattern to match the quote text (including emoji, quote, and author)
-                quote_pattern = r'🦛 \*\*Time for a Hydration Break!\*\*\n\n(✨.*?\n\n— .*?)\n\n📊 \*\*Your Status:'
-                quote_match = re.search(quote_pattern, message_text, re.DOTALL)
-                if quote_match:
-                    original_quote = quote_match.group(1).strip()
-                else:
-                    # Fallback: try to find any quote-like pattern starting with ✨
-                    fallback_pattern = r'(✨.*?\n\n— .*?)(?=\n\n📊|\n\n💧|$)'
-                    fallback_match = re.search(fallback_pattern, message_text, re.DOTALL)
-                    if fallback_match:
-                        original_quote = fallback_match.group(1).strip()
-            except Exception as e:
-                logger.warning(f"Could not extract original quote: {e}")
-            
-            # Get appropriate response message and a celebratory poem
+            # Get appropriate response message, fresh inspirational quote, and celebratory poem
             confirmation_message = self.content_manager.get_confirmation_message(hydration_level)
+            fresh_quote = self.content_manager.get_random_quote()
             celebration_poem = self.content_manager.get_random_poem()
             
-            # Build enhanced confirmation message with original quote retained and poem added
+            # Build enhanced confirmation message with fresh quote and poem
             response_text = f"✅ **Excellent!** {confirmation_message}\n\n"
-            
-            # Include the original inspirational quote if we found it
-            if original_quote:
-                response_text += f"💭 **Your Inspiration:**\n{original_quote}\n\n"
+            response_text += f"💭 **Your Inspiration:**\n{fresh_quote}\n\n"
             
             response_text += f"📊 **Updated Status:**\n"
             response_text += f"• Current level: {level_descriptions[hydration_level]}\n"
