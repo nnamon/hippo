@@ -246,3 +246,12 @@ class TestReminderSystem:
         assert len(reminder_system.active_jobs) == 0
         mock_job1.schedule_removal.assert_called_once()
         mock_job2.schedule_removal.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reminder_system_initialization(self, reminder_system):
+        """Test reminder system initialization."""
+        # Test that reminder system has correct attributes
+        assert hasattr(reminder_system, 'database')
+        assert hasattr(reminder_system, 'content_manager')
+        assert hasattr(reminder_system, 'active_jobs')
+        assert isinstance(reminder_system.active_jobs, dict)
