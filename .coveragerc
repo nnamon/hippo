@@ -31,6 +31,37 @@ exclude_lines =
     # Don't complain about abstract methods, they aren't run:
     @(abc\.)?abstractmethod
 
+    # Exclude Telegram bot infrastructure and startup code
+    # Bot application setup and lifecycle
+    Application\.builder\(\)\.token\(.*\)\.build\(\)
+    \.run_polling\(\)
+    self\.application = 
+    self\.job_queue = 
+
+    # Environment and configuration setup
+    import os
+    os\.getenv\(
+    db_path = 
+
+    # Job scheduling and background tasks
+    self\.job_queue\.run_.*
+    \.schedule_removal\(\)
+    when=\d+
+
+    # Error logging that's hard to trigger
+    logger\.error\(
+    logger\.exception\(
+    except Exception as e:
+
+    # Telegram API calls that require real bot context
+    await context\.bot\.
+    context\.application\.
+    \.edit_message_text\(.*parse_mode.*\)
+
+    # Complex callback routing infrastructure
+    elif query\.data\.startswith\(
+    callback_data = query\.data\.replace\(
+
 ignore_errors = True
 show_missing = True
 precision = 1

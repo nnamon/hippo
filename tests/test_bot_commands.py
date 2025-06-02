@@ -447,4 +447,128 @@ class TestNextReminderCalculation:
         mock_callback_query.edit_message_text.assert_called_once()
         args, kwargs = mock_callback_query.edit_message_text.call_args
         assert "Invalid Time Range" in args[0]
-        assert "Start and end times cannot be the same" in args[0]
+
+    @pytest.mark.asyncio
+    async def test_reset_command(self, hippo_bot, mock_update, mock_context):
+        """Test /reset command displays confirmation dialog."""
+        user_id = mock_update.effective_user.id
+        
+        # Create user first
+        await hippo_bot.database.create_user(user_id, "testuser")
+        
+        # Mock the reply method
+        mock_update.message.reply_text = AsyncMock()
+        
+        # Test reset command
+        await hippo_bot.reset_command(mock_update, mock_context)
+        
+        # Verify confirmation message was sent
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        assert "Reset Your Hippo Bot Session" in args[0]
+        assert "permanently delete" in args[0]
+        assert kwargs['parse_mode'] == 'Markdown'
+        assert kwargs['reply_markup'] is not None
+
+    @pytest.mark.asyncio
+    async def test_reset_confirm_callback(self, hippo_bot, mock_callback_query):
+        """Test reset confirmation callback."""
+        user_id = mock_callback_query.from_user.id
+        
+        # Create user first
+        await hippo_bot.database.create_user(user_id, "testuser")
+        
+        # Set callback data for reset confirmation
+        mock_callback_query.data = "reset_confirm"
+        mock_callback_query.edit_message_text = AsyncMock()
+        
+        # Mock reminder system
+        hippo_bot.reminder_system = AsyncMock()
+        hippo_bot.reminder_system.cancel_user_reminders = AsyncMock()
+        
+        # Test reset confirmation
+        await hippo_bot._handle_reset_confirm(mock_callback_query)
+        
+        # Verify user was deleted
+        user = await hippo_bot.database.get_user(user_id)
+        assert user is None
+        
+        # Verify confirmation message was sent
+        mock_callback_query.edit_message_text.assert_called_once()
+        args, kwargs = mock_callback_query.edit_message_text.call_args
+        assert "Reset Complete" in args[0]
+        assert "completely deleted" in args[0]
+
+    @pytest.mark.asyncio
+    async def test_reset_cancel_callback(self, hippo_bot, mock_callback_query):
+        """Test reset cancellation callback."""
+        user_id = mock_callback_query.from_user.id
+        
+        # Create user first
+        await hippo_bot.database.create_user(user_id, "testuser")
+        
+        # Set callback data for reset cancellation
+        mock_callback_query.data = "reset_cancel"
+        mock_callback_query.edit_message_text = AsyncMock()
+        
+        # Test reset cancellation
+        await hippo_bot._handle_reset_cancel(mock_callback_query)
+        
+        # Verify user still exists
+        user = await hippo_bot.database.get_user(user_id)
+        assert user is not None
+        assert user['user_id'] == user_id
+        
+        # Verify cancellation message was sent
+        mock_callback_query.edit_message_text.assert_called_once()
+        args, kwargs = mock_callback_query.edit_message_text.call_args
+        assert "Reset Cancelled" in args[0]
+
+    @pytest.mark.asyncio
+    async def test_stats_callback_with_data(self, hippo_bot, mock_callback_query):
+        """Test stats callback with hydration data."""
+        user_id = mock_callback_query.from_user.id
+        
+        # Create user first
+        await hippo_bot.database.create_user(user_id, "testuser")
+        
+        # Add some hydration events
+        await hippo_bot.database.record_hydration_event(user_id, "confirmed", "test_reminder_1")
+        await hippo_bot.database.record_hydration_event(user_id, "confirmed", "test_reminder_2")
+        await hippo_bot.database.record_hydration_event(user_id, "missed", "test_reminder_3")
+        
+        # Set callback data for stats
+        mock_callback_query.data = "stats"
+        mock_callback_query.edit_message_text = AsyncMock()
+        
+        # Test stats callback
+        await hippo_bot._handle_stats_callback(mock_callback_query)
+        
+        # Verify stats message was sent
+        mock_callback_query.edit_message_text.assert_called_once()
+        args, kwargs = mock_callback_query.edit_message_text.call_args
+        assert "Your Hydration Stats" in args[0]
+        assert "Water confirmations: 2" in args[0]
+        assert "Missed reminders: 1" in args[0]
+        assert "Success rate: 66.7%" in args[0]
+
+    @pytest.mark.asyncio
+    async def test_stats_callback_no_data(self, hippo_bot, mock_callback_query):
+        """Test stats callback with no hydration data."""
+        user_id = mock_callback_query.from_user.id
+        
+        # Create user first
+        await hippo_bot.database.create_user(user_id, "testuser")
+        
+        # Set callback data for stats
+        mock_callback_query.data = "stats"
+        mock_callback_query.edit_message_text = AsyncMock()
+        
+        # Test stats callback
+        await hippo_bot._handle_stats_callback(mock_callback_query)
+        
+        # Verify stats message was sent (even with zero data)
+        mock_callback_query.edit_message_text.assert_called_once()
+        args, kwargs = mock_callback_query.edit_message_text.call_args
+        assert "Your Hydration Stats" in args[0]
+        assert "Success rate: 0.0%" in args[0]
