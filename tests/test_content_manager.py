@@ -4,7 +4,7 @@ Tests for content manager functionality.
 
 import pytest
 import asyncio
-from unittest.mock import patch, AsyncMock, Mock
+from unittest.mock import patch, AsyncMock, Mock, MagicMock
 
 
 class TestContentManager:
@@ -283,3 +283,71 @@ class TestDynamicPoemGeneration:
             
             # Should get a fallback poem
             assert poem in content_manager.fallback_poems
+
+
+class TestQuoteGeneration:
+    """Test quote generation functionality."""
+    
+    @pytest.mark.asyncio
+    async def test_get_random_quote_async_with_cache(self, content_manager):
+        """Test async quote retrieval with successful cache."""
+        # Mock successful API response
+        mock_response_data = [
+            {"q": "The best time to plant a tree was 20 years ago.", "a": "Chinese Proverb"},
+            {"q": "Success is not final, failure is not fatal.", "a": "Winston Churchill"}
+        ]
+        
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_response = MagicMock()
+            mock_response.json.return_value = mock_response_data
+            mock_client.return_value.__aenter__.return_value.get.return_value = mock_response
+            
+            quote = await content_manager.get_random_quote_async()
+            
+            # Should get a formatted quote
+            assert "The best time to plant a tree" in quote or "Success is not final" in quote
+            assert "✨" in quote  # Check for emoji formatting
+            
+    @pytest.mark.asyncio 
+    async def test_get_random_quote_async_fallback(self, content_manager):
+        """Test async quote retrieval falls back to hardcoded quotes on API failure."""
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value.__aenter__.return_value.get.side_effect = Exception("API Error")
+            
+            quote = await content_manager.get_random_quote_async()
+            
+            # Should get a fallback quote
+            assert quote in content_manager.fallback_quotes
+            
+    def test_get_random_quote_sync_wrapper(self, content_manager):
+        """Test sync wrapper for quote retrieval."""
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value.__aenter__.return_value.get.side_effect = Exception("API Error")
+            
+            quote = content_manager.get_random_quote()
+            
+            # Should get a fallback quote
+            assert quote in content_manager.fallback_quotes
+            
+    def test_fallback_quote_repetition_avoidance(self, content_manager):
+        """Test that fallback quotes avoid repetition."""
+        # Clear recent quotes to start fresh
+        content_manager.recent_quotes = []
+        
+        # Get several quotes
+        quotes = []
+        for _ in range(5):
+            quote = content_manager._get_fallback_quote()
+            quotes.append(quote)
+        
+        # Check that we don't get immediate repetition (last few should be different)
+        assert len(set(quotes[-3:])) >= 2  # Last 3 should have at least 2 different quotes
+        
+    def test_fallback_quotes_content(self, content_manager):
+        """Test that fallback quotes have expected content and formatting."""
+        quote = content_manager._get_fallback_quote()
+        
+        # Should have emoji and quote formatting
+        assert "✨" in quote
+        assert "\"" in quote  # Should have quotes around the text
+        assert "—" in quote   # Should have attribution marker
