@@ -97,6 +97,7 @@ class HippoBot:
                 BotCommand("setup", "Configure reminder preferences"),
                 BotCommand("stats", "View your hydration statistics"),
                 BotCommand("poem", "Get a random water reminder poem"),
+                BotCommand("quote", "Get a random inspirational quote"),
                 BotCommand("reset", "Delete all your data and start fresh"),
                 BotCommand("help", "Show help and available commands")
             ]
@@ -122,6 +123,7 @@ class HippoBot:
         self.application.add_handler(CommandHandler("setup", self.setup_command))
         self.application.add_handler(CommandHandler("stats", self.stats_command))
         self.application.add_handler(CommandHandler("poem", self.poem_command))
+        self.application.add_handler(CommandHandler("quote", self.quote_command))
         self.application.add_handler(CommandHandler("reset", self.reset_command))
         
         # Callback query handler for buttons
@@ -196,10 +198,11 @@ class HippoBot:
 /setup - Configure your reminder preferences
 /stats - View your hydration statistics
 /poem - Get a random water reminder poem
+/quote - Get a random inspirational quote
 /reset - Delete all your data and start fresh
 /help - Show this help message
 
-I'll send you friendly reminders to drink water with cute cartoons and poems during your waking hours!
+I'll send you friendly reminders to drink water with cute cartoons, poems, and inspirational quotes during your waking hours!
         """
         await update.message.reply_text(help_text)
     
@@ -319,6 +322,59 @@ I'll send you friendly reminders to drink water with cute cartoons and poems dur
             logger.error(f"Error handling poem command: {e}")
             await update.message.reply_text(
                 "❌ Sorry, I couldn't fetch a poem right now. Please try again later!"
+            )
+    
+    async def quote_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /quote command."""
+        try:
+            # Check if content manager is initialized
+            if not self.content_manager:
+                logger.error("Content manager not initialized")
+                await update.message.reply_text(
+                    "❌ Bot is still starting up. Please try again in a moment!"
+                )
+                return
+            
+            user_id = update.effective_user.id
+            
+            # Get user's current hydration level and theme
+            hydration_level = await self.database.calculate_hydration_level(user_id)
+            user = await self.database.get_user(user_id)
+            theme = user.get('theme', 'bluey') if user else 'bluey'
+            
+            # Get a random inspirational quote from the content manager (async version)
+            quote = await self.content_manager.get_random_quote_async()
+            
+            # Get the appropriate image for the current hydration level
+            image_path = self.content_manager.get_image_for_hydration_level(hydration_level, theme)
+            
+            # Hydration level descriptions
+            level_descriptions = [
+                "😵 Dehydrated - Drink water now!",
+                "😟 Low hydration - Need more water", 
+                "😐 Moderate hydration - Doing okay",
+                "🙂 Good hydration - Keep it up!",
+                "😊 Great hydration - Well done!",
+                "🤩 Fully hydrated - Amazing!"
+            ]
+            
+            # Format the response with hydration status
+            quote_text = f"💭 *Here's an inspirational quote for you:*\n\n{quote}\n\n"
+            quote_text += f"💧 *Current Hydration:* {level_descriptions[hydration_level]}\n\n"
+            quote_text += "Stay inspired and stay hydrated! 🦛✨"
+            
+            # Send the image with the quote
+            with open(f"assets/{image_path}", 'rb') as image_file:
+                await update.message.reply_photo(
+                    photo=image_file,
+                    caption=quote_text,
+                    parse_mode='Markdown'
+                )
+            
+        except Exception as e:
+            logger.error(f"Error handling quote command: {e}")
+            await update.message.reply_text(
+                "❌ Sorry, I couldn't fetch a quote right now. Please try again later!"
             )
     
     async def reset_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

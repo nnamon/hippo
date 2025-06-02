@@ -26,6 +26,72 @@ This is a Python-based Telegram bot project with the following core components:
 
 ## Commands for Development
 
+### Makefile Workflow (Recommended)
+
+The project includes a comprehensive Makefile that automates all development tasks. **Benefits:**
+- **Consistency**: Same commands work across all environments
+- **Simplicity**: Single commands for complex workflows
+- **Integration**: Seamlessly integrates with Docker and existing scripts
+- **Productivity**: Reduces context switching and typing
+- **Reliability**: Tested, standardized procedures
+
+**Quick Start:**
+```bash
+make dev-setup    # Complete development environment setup
+make test         # Run all tests (unit + integration)
+make run          # Start the bot with Docker Compose
+make logs         # View bot logs
+```
+
+**Development Commands:**
+```bash
+make install      # Install Python dependencies locally
+make install-dev  # Install with development tools (black, flake8, mypy)
+make format       # Format code with black and isort
+make lint         # Run code linting with flake8 and mypy
+make validate     # Run linting + all tests (full validation)
+```
+
+**Testing Commands:**
+```bash
+make test              # All tests (unit + integration)
+make test-unit         # Unit tests only (faster)
+make test-integration  # Integration tests only
+make test-coverage     # Tests with HTML coverage report
+make quick-test        # Fast unit test run with minimal output
+make ci-test           # CI/CD pipeline simulation
+```
+
+**Application Management:**
+```bash
+make run           # Start bot in background (production mode)
+make run-dev       # Start bot in foreground (development mode)
+make stop          # Stop the running bot
+make restart       # Restart the bot (stop + start)
+make status        # Check bot health and container status
+make logs          # Follow live logs
+make logs-tail     # View last 100 log lines
+```
+
+**Database Operations:**
+```bash
+make db-debug      # Run comprehensive database analysis
+make db-shell      # Open SQLite shell for database
+make db-backup     # Create timestamped database backup
+make db-restore BACKUP_FILE=path/to/backup.db  # Restore from backup
+```
+
+**Maintenance:**
+```bash
+make clean         # Clean Docker containers and images
+make clean-all     # Deep clean including volumes
+make reset         # Reset everything and rebuild
+make version       # Show version and status information
+make help          # Show all available commands
+```
+
+### Traditional Commands (Alternative)
+
 **Install Dependencies:**
 ```bash
 pip install -r requirements.txt
@@ -43,13 +109,32 @@ The project uses a comprehensive testing system with **Docker-based containers**
 
 ### Test Execution Methods
 
-**All testing is done in Docker containers to ensure consistent environments between local development and CI/CD:**
+**All testing is done in Docker containers to ensure consistent environments between local development and CI/CD.**
+
+#### Recommended: Makefile Commands
+
+```bash
+# Complete test suite (recommended for development)
+make test              # Build test container + run all tests + integration tests
+
+# Specific test types
+make test-unit         # Unit tests only (faster for development)
+make test-integration  # Integration tests only
+make test-coverage     # Generate detailed HTML coverage report
+make quick-test        # Fast unit tests with minimal output
+
+# CI/CD simulation
+make ci-test           # Full CI pipeline (build + test + integration)
+make validate          # Code quality + tests (linting + testing)
+```
+
+#### Traditional Docker Commands (Alternative)
 
 ```bash
 # Build test container with all dependencies
 docker build -f Dockerfile.test -t hippo-test .
 
-# Run all unit tests with coverage (64 tests)
+# Run all unit tests with coverage (89 tests)
 docker run --rm hippo-test
 
 # Run integration tests (5 component tests)  
@@ -65,18 +150,19 @@ docker run --rm hippo-bot:test python -c "from bot.hippo_bot import HippoBot; pr
 
 ### Test Coverage Status
 
-- **Current Coverage**: 62.6% overall
+- **Current Coverage**: 77.8% overall (focused on business logic)
 - **Minimum Required**: 55% (CI enforced)
 - **Target Coverage**: 80% overall
 - **Coverage Tracking**: XML, HTML, JSON reports + Codecov integration
-- **Total Tests**: 64 unit tests + 5 integration tests
+- **Total Tests**: 89 unit tests + 5 integration tests
+- **Coverage Strategy**: Infrastructure code excluded via pragma comments to focus metrics on testable business logic
 
 ### Test Categories
 
-1. **Unit Tests** (`tests/test_*.py`) - **64 tests total**:
-   - **Bot Commands** (15 tests): Command handlers, callbacks, next reminder calculations
-   - **Content Manager** (11 + 11 dynamic tests): Poem generation, themes, emoji classification
-   - **Database** (12 tests): User management, hydration tracking, data persistence  
+1. **Unit Tests** (`tests/test_*.py`) - **89 tests total**:
+   - **Bot Commands** (29 tests): Command handlers, callbacks, reset functionality, quote commands, stats displays
+   - **Content Manager** (17 + 11 dynamic + 5 quote tests): Poem generation, themes, emoji classification, quote functionality
+   - **Database** (17 tests): User management, hydration tracking, data persistence, active reminders
    - **Reminder System** (15 tests): Scheduling, timezone handling, waking hours
 
 2. **Integration Tests** (`scripts/integration_test.py`) - **5 tests**:
@@ -193,16 +279,21 @@ The project includes comprehensive database debugging tools for troubleshooting 
 
 **Quick Debug (Recommended):**
 ```bash
-./scripts/debug.sh
+make db-debug         # Comprehensive database analysis with Makefile
 ```
 
-**Manual Debug:**
+**Alternative Methods:**
 ```bash
-# From host with mounted volume
+./scripts/debug.sh    # Direct script execution
+
+# Manual debug
 DATABASE_PATH=./data/hippo.db python scripts/debug_database.py
 
 # From inside Docker container (after rebuild)
 docker exec hippo-water-bot python scripts/debug_database.py
+
+# Interactive database shell
+make db-shell         # Open SQLite shell with Makefile
 ```
 
 **Debug Output Includes:**
@@ -224,7 +315,21 @@ docker exec hippo-water-bot python scripts/debug_database.py
 
 **CRITICAL: Always use feature branches and pull requests. NEVER commit directly to main.**
 
-### Required Workflow
+### Required Workflow (with Makefile)
+1. **Create feature branch**: `git checkout -b feature/description-of-work`
+2. **Implement changes** on the feature branch
+3. **Write/update tests**: Add tests for new functionality or bug fixes
+4. **Run validation**: `make validate` to run linting and all tests
+5. **Test functionality**: Test the bot implementation manually as appropriate
+6. **Commit changes** to feature branch with descriptive messages
+7. **Push branch**: `git push -u origin feature/branch-name`
+8. **Verify GitHub Actions**: Ensure all CI/CD checks pass (tests, coverage, security)
+9. **Test with running bot**: Before creating a PR, ask the user to verify the changes work with the running bot
+10. **Create Pull Request**: Use `gh pr create` with proper title and description ONLY after user confirms the implementation works
+11. **Review coverage comments**: Address any coverage concerns in the automated PR comment
+12. **Only merge** after review/approval and all checks passing
+
+### Alternative Workflow (Traditional)
 1. **Create feature branch**: `git checkout -b feature/description-of-work`
 2. **Implement changes** on the feature branch
 3. **Write/update tests**: Add tests for new functionality or bug fixes
@@ -252,10 +357,20 @@ docker exec hippo-water-bot python scripts/debug_database.py
 - Write tests for new features alongside implementation
 - Use existing test patterns in `tests/` directory as templates
 - Ensure new code maintains or improves overall coverage
-- Run tests locally before pushing: `./scripts/run_tests.sh`
+- Run tests locally before pushing: `make test` (recommended) or `./scripts/run_tests.sh`
+- Use `make quick-test` for rapid feedback during development
+- Use `make test-coverage` to verify coverage improvements
 
 #### Debugging Failed Tests
-**When GitHub Actions fail**:
+**When GitHub Actions fail (Makefile approach)**:
+1. **Check the PR comment**: Automatic coverage analysis identifies issues
+2. **Run tests locally**: `make test` or `make ci-test` to reproduce issues
+3. **Quick debugging**: `make quick-test` for fast feedback
+4. **View detailed logs**: Use `gh run view --log-failed` for GitHub Actions logs
+5. **Test specific components**: `make test-unit` or `make test-integration`
+6. **Generate coverage report**: `make test-coverage` for detailed analysis
+
+**Traditional approach**:
 1. **Check the PR comment**: Automatic coverage analysis identifies issues
 2. **Run tests locally**: `./scripts/run_tests.sh` to reproduce issues
 3. **View detailed logs**: Use `gh run view --log-failed` for GitHub Actions logs

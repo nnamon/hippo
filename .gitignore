@@ -191,3 +191,4 @@ config.env
 logs/
 temp/
 cartoon_images/
+backups/
