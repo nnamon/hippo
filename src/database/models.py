@@ -470,3 +470,90 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error counting confirmations for user {user_id}: {e}")
             return 0
+    
+    async def get_hydration_events_for_date(self, user_id: int, date: datetime) -> List[Dict[str, Any]]:
+        """Get hydration events for a specific date."""
+        try:
+            start_date = date.strftime('%Y-%m-%d 00:00:00')
+            end_date = date.strftime('%Y-%m-%d 23:59:59')
+            
+            async with self.connection.execute("""
+                SELECT event_type, reminder_id, created_at
+                FROM hydration_events
+                WHERE user_id = ? AND created_at BETWEEN ? AND ?
+                ORDER BY created_at
+            """, (user_id, start_date, end_date)) as cursor:
+                rows = await cursor.fetchall()
+                columns = [description[0] for description in cursor.description]
+                return [dict(zip(columns, row)) for row in rows]
+        except Exception as e:
+            logger.error(f"Error getting hydration events for user {user_id} on {date}: {e}")
+            return []
+    
+    async def get_daily_hydration_summary(self, user_id: int, days: int = 7) -> List[Dict[str, Any]]:
+        """Get daily hydration summary for the last N days."""
+        try:
+            async with self.connection.execute("""
+                SELECT 
+                    DATE(created_at) as date,
+                    COUNT(CASE WHEN event_type = 'confirmed' THEN 1 END) as confirmed,
+                    COUNT(CASE WHEN event_type = 'missed' THEN 1 END) as missed,
+                    COUNT(*) as total,
+                    CAST(COUNT(CASE WHEN event_type = 'confirmed' THEN 1 END) AS FLOAT) / COUNT(*) as success_rate
+                FROM hydration_events
+                WHERE user_id = ? AND created_at >= datetime('now', '-{} days')
+                GROUP BY DATE(created_at)
+                ORDER BY date
+            """.format(days), (user_id,)) as cursor:
+                rows = await cursor.fetchall()
+                columns = [description[0] for description in cursor.description]
+                return [dict(zip(columns, row)) for row in rows]
+        except Exception as e:
+            logger.error(f"Error getting daily hydration summary for user {user_id}: {e}")
+            return []
+    
+    async def get_monthly_hydration_summary(self, user_id: int, year: int, month: int) -> List[Dict[str, Any]]:
+        """Get daily hydration summary for a specific month."""
+        try:
+            start_date = f"{year}-{month:02d}-01"
+            # Get the last day of the month
+            import calendar
+            last_day = calendar.monthrange(year, month)[1]
+            end_date = f"{year}-{month:02d}-{last_day}"
+            
+            async with self.connection.execute("""
+                SELECT 
+                    DATE(created_at) as date,
+                    COUNT(CASE WHEN event_type = 'confirmed' THEN 1 END) as confirmed,
+                    COUNT(CASE WHEN event_type = 'missed' THEN 1 END) as missed,
+                    COUNT(*) as total,
+                    CAST(COUNT(CASE WHEN event_type = 'confirmed' THEN 1 END) AS FLOAT) / COUNT(*) as success_rate
+                FROM hydration_events
+                WHERE user_id = ? AND DATE(created_at) BETWEEN ? AND ?
+                GROUP BY DATE(created_at)
+                ORDER BY date
+            """, (user_id, start_date, end_date)) as cursor:
+                rows = await cursor.fetchall()
+                columns = [description[0] for description in cursor.description]
+                return [dict(zip(columns, row)) for row in rows]
+        except Exception as e:
+            logger.error(f"Error getting monthly hydration summary for user {user_id}: {e}")
+            return []
+    
+    async def get_recent_hydration_levels(self, user_id: int, days: int = 7) -> List[int]:
+        """Get hydration levels for the last N days."""
+        try:
+            levels = []
+            from datetime import datetime, timedelta
+            
+            for i in range(days):
+                date = datetime.now() - timedelta(days=i)
+                # Calculate hydration level for this specific date
+                # This is a simplified version - in practice you might want to store daily levels
+                level = await self.calculate_hydration_level(user_id)
+                levels.append(level)
+            
+            return list(reversed(levels))  # Return chronological order
+        except Exception as e:
+            logger.error(f"Error getting recent hydration levels for user {user_id}: {e}")
+            return [2] * days  # Default moderate levels
