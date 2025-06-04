@@ -81,7 +81,7 @@ class TestBotCommands:
         
         mock_update.message.reply_text.assert_called_once()
         args, kwargs = mock_update.message.reply_text.call_args
-        assert "Hydration Stats" in args[0]
+        assert "Hydration Report" in args[0]
     
     @pytest.mark.asyncio
     async def test_stats_command_with_user(self, hippo_bot, mock_update, mock_context, sample_user_data):
@@ -99,7 +99,7 @@ class TestBotCommands:
         
         mock_update.message.reply_text.assert_called_once()
         args, kwargs = mock_update.message.reply_text.call_args
-        assert "Hydration Stats" in args[0]
+        assert "Hydration Report" in args[0]
         assert "success rate" in args[0].lower()
         assert "Achievements:" in args[0]  # Check achievement count is shown
     
@@ -167,6 +167,80 @@ class TestBotCommands:
         assert "Here's an inspirational quote for you:" in caption
         assert "Current Hydration:" in caption
         assert "Stay inspired and stay hydrated!" in caption
+    
+    @pytest.mark.asyncio
+    async def test_hipponame_command_no_args(self, hippo_bot, mock_update, mock_context):
+        """Test /hipponame command without arguments (shows current name)."""
+        user_id = mock_update.effective_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        # Mock the message text to simulate "/hipponame" with no arguments
+        mock_update.message.text = "/hipponame"
+        mock_update.message.reply_text = AsyncMock()
+        
+        await hippo_bot.hipponame_command(mock_update, mock_context)
+        
+        # Verify response shows current name (default)
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        text = args[0]
+        assert "Current name: **Hippo**" in text
+        assert "To change the name, use:" in text
+    
+    @pytest.mark.asyncio
+    async def test_hipponame_command_with_valid_name(self, hippo_bot, mock_update, mock_context):
+        """Test /hipponame command with valid new name."""
+        user_id = mock_update.effective_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        # Mock the message text to simulate "/hipponame Splashy"
+        mock_update.message.text = "/hipponame Splashy"
+        mock_update.message.reply_text = AsyncMock()
+        
+        await hippo_bot.hipponame_command(mock_update, mock_context)
+        
+        # Verify response confirms name change
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        text = args[0]
+        assert "Your hippo is now named **Splashy**!" in text
+        
+        # Verify name was actually saved
+        user = await hippo_bot.database.get_user(user_id)
+        assert user['hippo_name'] == "Splashy"
+    
+    @pytest.mark.asyncio
+    async def test_hipponame_command_with_invalid_name(self, hippo_bot, mock_update, mock_context):
+        """Test /hipponame command with invalid name."""
+        user_id = mock_update.effective_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        # Mock the message text with invalid name (too long)
+        mock_update.message.text = "/hipponame ThisNameIsTooLongForValidation"
+        mock_update.message.reply_text = AsyncMock()
+        
+        await hippo_bot.hipponame_command(mock_update, mock_context)
+        
+        # Verify error response
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        text = args[0]
+        assert "Invalid name!" in text
+        assert "1-20 characters long" in text
+    
+    @pytest.mark.asyncio
+    async def test_hipponame_command_no_user(self, hippo_bot, mock_update, mock_context):
+        """Test /hipponame command for user that doesn't exist."""
+        mock_update.message.text = "/hipponame Splashy"
+        mock_update.message.reply_text = AsyncMock()
+        
+        await hippo_bot.hipponame_command(mock_update, mock_context)
+        
+        # Verify error response
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        text = args[0]
+        assert "Please use /start to set up your account first!" in text
     
     @pytest.mark.asyncio
     async def test_achievements_command(self, hippo_bot, mock_update, mock_context):
@@ -621,7 +695,7 @@ class TestNextReminderCalculation:
         # Verify stats message was sent
         mock_callback_query.edit_message_text.assert_called_once()
         args, kwargs = mock_callback_query.edit_message_text.call_args
-        assert "Your Hydration Stats" in args[0]
+        assert "Hydration Report" in args[0]
         assert "Water confirmations: 2" in args[0]
         assert "Missed reminders: 1" in args[0]
         assert "Success rate: 66.7%" in args[0]
@@ -644,5 +718,75 @@ class TestNextReminderCalculation:
         # Verify stats message was sent (even with zero data)
         mock_callback_query.edit_message_text.assert_called_once()
         args, kwargs = mock_callback_query.edit_message_text.call_args
-        assert "Your Hydration Stats" in args[0]
+        assert "Hydration Report" in args[0]
         assert "Success rate: 0.0%" in args[0]
+
+
+class TestHippoNameValidation:
+    """Test hippo name validation functionality."""
+    
+    @pytest.mark.asyncio
+    async def test_validate_and_save_hippo_name_valid_names(self, hippo_bot):
+        """Test validation with valid hippo names."""
+        user_id = 12345
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        # Test valid names
+        valid_names = ["Hippo", "Splashy", "Bubbles", "Mr. Blue", "Aqua-2", "Sam's Pet"]
+        
+        for name in valid_names:
+            result = await hippo_bot._validate_and_save_hippo_name(user_id, name)
+            assert result is True, f"Name '{name}' should be valid"
+            
+            # Verify it was saved
+            user = await hippo_bot.database.get_user(user_id)
+            assert user['hippo_name'] == name
+    
+    @pytest.mark.asyncio
+    async def test_validate_and_save_hippo_name_invalid_names(self, hippo_bot):
+        """Test validation with invalid hippo names."""
+        user_id = 12345
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        # Test invalid names
+        invalid_names = [
+            "",  # Empty
+            "   ",  # Only spaces
+            "ThisNameIsTooLongForValidation",  # Too long (> 20 chars)
+            "Invalid@Name",  # Invalid characters
+            "No#Symbols",  # Invalid characters
+            "Bad$Name",  # Invalid characters
+        ]
+        
+        original_name = "Hippo"  # Default name
+        
+        for name in invalid_names:
+            result = await hippo_bot._validate_and_save_hippo_name(user_id, name)
+            assert result is False, f"Name '{name}' should be invalid"
+            
+            # Verify name wasn't changed
+            user = await hippo_bot.database.get_user(user_id)
+            assert user['hippo_name'] == original_name
+    
+    @pytest.mark.asyncio
+    async def test_validate_and_save_hippo_name_edge_cases(self, hippo_bot):
+        """Test validation with edge cases."""
+        user_id = 12345
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        # Test edge cases
+        edge_cases = [
+            ("A", True),  # Single character
+            ("Aa", True),  # Two characters
+            ("12345678901234567890", True),  # Exactly 20 characters
+            ("1234567890123456789012", False),  # 21 characters (too long)
+            ("Name-With-Hyphens", True),  # Hyphens allowed
+            ("Name With Spaces", True),  # Spaces allowed
+            ("Name'With'Apostrophe", True),  # Apostrophes allowed
+            ("Mr. Blue", True),  # Periods allowed
+            ("123Numbers456", True),  # Numbers allowed
+        ]
+        
+        for name, should_be_valid in edge_cases:
+            result = await hippo_bot._validate_and_save_hippo_name(user_id, name)
+            assert result == should_be_valid, f"Name '{name}' validation should be {should_be_valid}"

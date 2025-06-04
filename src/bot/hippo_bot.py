@@ -28,6 +28,14 @@ from src.bot.achievements import AchievementChecker, ACHIEVEMENTS
 
 logger = logging.getLogger(__name__)
 
+# Fun hippo name suggestions
+HIPPO_NAME_SUGGESTIONS = [
+    "Splashy", "Bubbles", "River", "Aqua", "Hydro", "Tsunami",
+    "Splash", "Ripple", "Puddle", "Drops", "Ocean", "Brook",
+    "Crystal", "Misty", "Rain", "Storm", "Blue", "Wave",
+    "Fluid", "Gush", "Spring", "Flow", "Dew", "Cascade"
+]
+
 
 class HippoBot:
     """Main Hippo bot class."""
@@ -110,6 +118,7 @@ class HippoBot:
                 BotCommand("charts", "View hydration charts and progress visualizations"),
                 BotCommand("poem", "Get a random water reminder poem"),
                 BotCommand("quote", "Get a random inspirational quote"),
+                BotCommand("hipponame", "Change your hippo's name"),
                 BotCommand("reset", "Delete all your data and start fresh"),
                 BotCommand("help", "Show help and available commands")
             ]
@@ -138,6 +147,7 @@ class HippoBot:
         self.application.add_handler(CommandHandler("charts", self.charts_command))
         self.application.add_handler(CommandHandler("poem", self.poem_command))
         self.application.add_handler(CommandHandler("quote", self.quote_command))
+        self.application.add_handler(CommandHandler("hipponame", self.hipponame_command))
         self.application.add_handler(CommandHandler("reset", self.reset_command))
         
         # Callback query handler for buttons
@@ -214,6 +224,7 @@ class HippoBot:
 /achievements - View your achievements and progress
 /poem - Get a random water reminder poem
 /quote - Get a random inspirational quote
+/hipponame - Change your hippo's name
 /reset - Delete all your data and start fresh
 /help - Show this help message
 
@@ -227,6 +238,7 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
         
         # Create setup keyboard
         keyboard = [
+            [InlineKeyboardButton("🦛 Name Your Hippo", callback_data="setup_hippo_name")],
             [InlineKeyboardButton("🌍 Set Timezone", callback_data="setup_timezone")],
             [InlineKeyboardButton("🌅 Set Waking Hours", callback_data="setup_waking_hours")],
             [InlineKeyboardButton("⏰ Set Reminder Interval", callback_data="setup_interval")],
@@ -237,6 +249,7 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
         
         setup_text = "🛠️ *Setup Your Hippo Bot*\n\n"
         setup_text += "Let's configure your water reminder preferences:\n\n"
+        setup_text += "• **Hippo Name**: Give your companion a personal name\n"
         setup_text += "• **Timezone**: Your local timezone for accurate reminders\n"
         setup_text += "• **Waking Hours**: When you want to receive reminders\n"
         setup_text += "• **Reminder Interval**: How often to remind you\n"
@@ -274,14 +287,18 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
             "🤩 Perfect hydration - You're amazing!"
         ]
         
+        # Get user data for hippo name
+        user_data = await self.database.get_user(user_id)
+        hippo_name = user_data.get('hippo_name', 'Hippo') if user_data else 'Hippo'
+        
         # Calculate next reminder time
         next_reminder_text = await self._calculate_next_reminder_text(user_id)
         
-        stats_text = f"📊 *Your Hydration Stats (Last 7 Days)*\n\n"
+        stats_text = f"📊 *{hippo_name}'s Hydration Report (Last 7 Days)*\n\n"
         stats_text += f"💧 Water confirmations: {stats['confirmed']}\n"
         stats_text += f"❌ Missed reminders: {stats['missed']}\n"
         stats_text += f"📈 Success rate: {success_rate:.1f}%\n\n"
-        stats_text += f"Current hydration level:\n{level_descriptions[hydration_level]}\n\n"
+        stats_text += f"{hippo_name}'s current assessment:\n{level_descriptions[hydration_level]}\n\n"
         stats_text += f"⏰ {next_reminder_text}"
         
         # Add achievement count to stats
@@ -516,6 +533,54 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
                 "❌ Sorry, I couldn't fetch a quote right now. Please try again later!"
             )
     
+    async def hipponame_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /hipponame command."""
+        user_id = update.effective_user.id
+        
+        # Get current hippo name
+        user_data = await self.database.get_user(user_id)
+        if not user_data:
+            await update.message.reply_text(
+                "Please use /start to set up your account first!"
+            )
+            return
+        
+        current_name = user_data.get('hippo_name', 'Hippo')
+        
+        # Check if user provided a new name
+        args = update.message.text.split(' ', 1)
+        if len(args) > 1:
+            new_name = args[1].strip()
+            
+            # Validate and save the new name
+            if await self._validate_and_save_hippo_name(user_id, new_name):
+                await update.message.reply_text(
+                    f"🦛 *Name updated!*\n\n"
+                    f"Your hippo is now named **{new_name}**!\n"
+                    f"{new_name} is excited to continue helping you stay hydrated! 💧",
+                    parse_mode='Markdown'
+                )
+            else:
+                await update.message.reply_text(
+                    "❌ *Invalid name!*\n\n"
+                    "Please make sure the name is:\n"
+                    "• 1-20 characters long\n"
+                    "• Contains only letters, numbers, spaces, hyphens, apostrophes, or periods\n\n"
+                    "Example: `/hipponame Bubbles`",
+                    parse_mode='Markdown'
+                )
+        else:
+            # Show current name and instructions
+            await update.message.reply_text(
+                f"🦛 *Your Hippo's Name*\n\n"
+                f"Current name: **{current_name}**\n\n"
+                f"To change the name, use:\n"
+                f"`/hipponame [new name]`\n\n"
+                f"Example: `/hipponame Splashy`\n\n"
+                f"Or use /setup to access the name selection menu.",
+                parse_mode='Markdown'
+            )
+    
     async def reset_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /reset command with confirmation."""
         user_id = update.effective_user.id
@@ -566,6 +631,8 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
             await self._handle_timezone_selection(query)
         elif query.data.startswith("theme_"):
             await self._handle_theme_selection(query)
+        elif query.data.startswith("name_"):
+            await self._handle_name_selection(query)
         elif query.data.startswith("custom_hours_"):
             await self._handle_custom_hours_callback(query)
         elif query.data.startswith("start_hour_"):
@@ -592,9 +659,13 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
             reminder_id = query.data.replace("confirm_water_", "")
             user_id = query.from_user.id
             
+            # Get user data early for immediate feedback
+            user_data = await self.database.get_user(user_id)
+            hippo_name = user_data.get('hippo_name', 'Hippo') if user_data else 'Hippo'
+            
             # PHASE 1: Immediate text-only update for instant feedback
             try:
-                immediate_text = "✅ **Great job!** Recording your water intake...\n\n🔄 Updating your hydration status..."
+                immediate_text = f"✅ **{hippo_name} is so proud!** Recording your water intake...\n\n🔄 Updating your hydration status..."
                 if query.message.photo:
                     await query.edit_message_caption(
                         caption=immediate_text,
@@ -629,8 +700,7 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
             hydration_level = await self.database.calculate_hydration_level(user_id)
             daily_stats = await self.database.get_user_hydration_stats(user_id, days=1)
             
-            # Get user data for theme
-            user_data = await self.database.get_user(user_id)
+            # Get theme (user_data already retrieved above)
             theme = user_data.get('theme', 'bluey') if user_data else 'bluey'
             
             # Calculate daily progress
@@ -653,23 +723,23 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
             celebration_poem = self.content_manager.get_random_poem()
             
             # Build enhanced confirmation message with fresh quote and poem
-            response_text = f"✅ **Excellent!** {confirmation_message}\n\n"
-            response_text += f"💭 **Your Inspiration:**\n{fresh_quote}\n\n"
+            response_text = f"✅ **{hippo_name} is beaming with pride!** {confirmation_message}\n\n"
+            response_text += f"💭 **{hippo_name}'s Inspiration for you:**\n{fresh_quote}\n\n"
             
-            response_text += f"📊 **Updated Status:**\n"
+            response_text += f"📊 **{hippo_name}'s Updated Status Report:**\n"
             response_text += f"• Current level: {level_descriptions[hydration_level]}\n"
             response_text += f"• Today: {daily_stats['confirmed']}✅ {daily_stats['missed']}❌"
             if total_today > 0:
                 response_text += f" ({success_rate:.0f}%)"
             response_text += "\n\n"
             
-            # Add level-specific encouragement
+            # Add level-specific encouragement with hippo name
             if hydration_level >= 4:
-                response_text += "🌟 You're doing amazing! Keep up this fantastic hydration routine!\n\n"
+                response_text += f"🌟 {hippo_name} says you're doing amazing! Keep up this fantastic hydration routine!\n\n"
             elif hydration_level >= 2:
-                response_text += "💪 Great progress! You're building excellent habits!\n\n"
+                response_text += f"💪 {hippo_name} sees your great progress! You're building excellent habits!\n\n"
             else:
-                response_text += "🌱 Every sip counts! You're on the right track!\n\n"
+                response_text += f"🌱 {hippo_name} knows every sip counts! You're on the right track!\n\n"
             
             # Add achievement notifications if any
             if new_achievements:
@@ -681,7 +751,7 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
                 response_text += "\n"
             
             # Add a celebratory poem as a reward
-            response_text += f"🎉 **Here's a celebration poem just for you:**\n\n{celebration_poem}"
+            response_text += f"🎉 **{hippo_name} has a celebration poem just for you:**\n\n{celebration_poem}"
             
             # Get the updated image for the new hydration level
             updated_image_path = self.content_manager.get_image_for_hydration_level(hydration_level, theme)
@@ -741,7 +811,9 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
         """Handle setup-related callback queries."""
         action = query.data.replace("setup_", "")
         
-        if action == "timezone":
+        if action == "hippo_name":
+            await self._setup_hippo_name(query)
+        elif action == "timezone":
             await self._setup_timezone(query)
         elif action == "waking_hours":
             await self._setup_waking_hours(query)
@@ -754,6 +826,7 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
         elif action == "back":
             # Return to main setup menu
             keyboard = [
+                [InlineKeyboardButton("🦛 Name Your Hippo", callback_data="setup_hippo_name")],
                 [InlineKeyboardButton("🌍 Set Timezone", callback_data="setup_timezone")],
                 [InlineKeyboardButton("🌅 Set Waking Hours", callback_data="setup_waking_hours")],
                 [InlineKeyboardButton("⏰ Set Reminder Interval", callback_data="setup_interval")],
@@ -764,6 +837,7 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
             
             setup_text = "🛠️ *Setup Your Hippo Bot*\n\n"
             setup_text += "Let's configure your water reminder preferences:\n\n"
+            setup_text += "• **Hippo Name**: Give your companion a personal name\n"
             setup_text += "• **Timezone**: Your local timezone for accurate reminders\n"
             setup_text += "• **Waking Hours**: When you want to receive reminders\n"
             setup_text += "• **Reminder Interval**: How often to remind you\n"
@@ -777,6 +851,40 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
             )
         else:
             await query.edit_message_text("Unknown setup option")
+    
+    async def _setup_hippo_name(self, query):
+        """Handle hippo name setup."""
+        import random
+        
+        # Get current hippo name
+        user_id = query.from_user.id
+        user_data = await self.database.get_user(user_id)
+        current_name = user_data.get('hippo_name', 'Hippo') if user_data else 'Hippo'
+        
+        # Select 6 random suggestions
+        suggestions = random.sample(HIPPO_NAME_SUGGESTIONS, 6)
+        
+        keyboard = []
+        # Add suggestion buttons in rows of 2
+        for i in range(0, len(suggestions), 2):
+            row = []
+            row.append(InlineKeyboardButton(f"🦛 {suggestions[i]}", callback_data=f"name_{suggestions[i]}"))
+            if i + 1 < len(suggestions):
+                row.append(InlineKeyboardButton(f"🦛 {suggestions[i+1]}", callback_data=f"name_{suggestions[i+1]}"))
+            keyboard.append(row)
+        
+        # Add custom name and back button
+        keyboard.append([InlineKeyboardButton("✏️ Enter Custom Name", callback_data="name_custom")])
+        keyboard.append([InlineKeyboardButton("⬅️ Back to Setup", callback_data="setup_back")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        text = "🦛 *Name Your Hippo Companion*\n\n"
+        text += f"Your hippo's current name is: **{current_name}**\n\n"
+        text += "Choose a new name from the suggestions below, or enter a custom name:\n\n"
+        text += "💧 Your hippo will appear in all reminders and messages!"
+        
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=reply_markup)
     
     async def _setup_timezone(self, query):
         """Handle timezone setup."""
@@ -957,6 +1065,10 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
         
         completion_text = "🎉 *Setup Complete!*\n\n"
         completion_text += f"**Your Settings:**\n"
+        
+        # Show hippo name
+        hippo_name = user_data.get('hippo_name', 'Hippo')
+        completion_text += f"• Hippo Name: {hippo_name}\n"
         
         # Format waking hours display
         if user_data['waking_start_hour'] == 0 and user_data['waking_end_hour'] == 23:
@@ -1159,6 +1271,65 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
         except Exception as e:
             logger.error(f"Error setting theme: {e}")
             await query.edit_message_text("❌ Error setting theme. Please try again.")
+    
+    async def _handle_name_selection(self, query):
+        """Handle hippo name selection."""
+        try:
+            user_id = query.from_user.id
+            selection = query.data.replace("name_", "")
+            
+            if selection == "custom":
+                # Handle custom name input
+                await query.edit_message_text(
+                    "✏️ *Enter Custom Hippo Name*\n\n"
+                    "Please type your hippo's new name in the chat.\n"
+                    "The name should be 1-20 characters long.\n\n"
+                    "💡 *Tip*: Use /setup to return to the setup menu if needed.",
+                    parse_mode='Markdown'
+                )
+                # Store state for text message handler
+                if not hasattr(self, '_awaiting_custom_name'):
+                    self._awaiting_custom_name = set()
+                self._awaiting_custom_name.add(user_id)
+            else:
+                # Handle predefined name selection
+                name = selection
+                if await self._validate_and_save_hippo_name(user_id, name):
+                    await query.edit_message_text(
+                        f"🦛 *Great choice!*\n\n"
+                        f"Your hippo is now named **{name}**!\n"
+                        f"{name} is excited to help you stay hydrated! 💧",
+                        parse_mode='Markdown',
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("✅ Finish Setup", callback_data="setup_complete")
+                        ]])
+                    )
+                else:
+                    await query.edit_message_text("❌ Error saving hippo name. Please try again.")
+                    
+        except Exception as e:
+            logger.error(f"Error setting hippo name: {e}")
+            await query.edit_message_text("❌ Error setting hippo name. Please try again.")
+    
+    async def _validate_and_save_hippo_name(self, user_id: int, name: str) -> bool:
+        """Validate and save hippo name."""
+        # Validate name
+        if not name or len(name.strip()) == 0:
+            return False
+        
+        name = name.strip()
+        
+        # Length validation
+        if len(name) > 20:
+            return False
+        
+        # Basic content validation (no special characters except spaces, hyphens, apostrophes, periods)
+        import re
+        if not re.match(r"^[a-zA-Z0-9\s\-'.]+$", name):
+            return False
+        
+        # Save to database
+        return await self.database.update_user_hippo_name(user_id, name)
     
     async def _handle_reset_confirm(self, query):
         """Handle reset confirmation."""
@@ -1430,6 +1601,10 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
         # Get current hydration level
         hydration_level = await self.database.calculate_hydration_level(user_id)
         
+        # Get user data for hippo name
+        user_data = await self.database.get_user(user_id)
+        hippo_name = user_data.get('hippo_name', 'Hippo') if user_data else 'Hippo'
+        
         level_descriptions = {
             0: "🏜️ Completely Dehydrated - Needs immediate water!",
             1: "😵 Very Dehydrated - Multiple glasses needed",
@@ -1439,7 +1614,7 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
             5: "🤩 Perfectly Hydrated - You're crushing it!"
         }
         
-        stats_text = f"📊 *Your Hydration Stats (Last 7 Days)*\n\n"
+        stats_text = f"📊 *{hippo_name}'s Hydration Report (Last 7 Days)*\n\n"
         stats_text += f"💧 Water confirmations: {stats['confirmed']}\n"
         stats_text += f"❌ Missed reminders: {stats['missed']}\n"
         stats_text += f"📈 Success rate: {success_rate:.1f}%\n\n"
@@ -1723,7 +1898,33 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular text messages."""
-        await update.message.reply_text(
-            "I'm here to help you stay hydrated! 🦛💧\n\n"
-            "Use /help to see what I can do for you."
-        )
+        user_id = update.effective_user.id
+        
+        # Check if user is entering a custom hippo name
+        if hasattr(self, '_awaiting_custom_name') and user_id in self._awaiting_custom_name:
+            name = update.message.text.strip()
+            
+            # Validate the name
+            if await self._validate_and_save_hippo_name(user_id, name):
+                self._awaiting_custom_name.remove(user_id)
+                await update.message.reply_text(
+                    f"🦛 *Perfect!*\n\n"
+                    f"Your hippo is now named **{name}**!\n"
+                    f"{name} is excited to help you stay hydrated! 💧\n\n"
+                    "Use /setup to continue configuring your bot.",
+                    parse_mode='Markdown'
+                )
+            else:
+                await update.message.reply_text(
+                    "❌ *Invalid name!*\n\n"
+                    "Please make sure the name is:\n"
+                    "• 1-20 characters long\n"
+                    "• Contains only letters, numbers, spaces, hyphens, apostrophes, or periods\n\n"
+                    "Try again or use /setup to return to the setup menu.",
+                    parse_mode='Markdown'
+                )
+        else:
+            await update.message.reply_text(
+                "I'm here to help you stay hydrated! 🦛💧\n\n"
+                "Use /help to see what I can do for you."
+            )
