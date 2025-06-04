@@ -78,6 +78,18 @@ class DatabaseManager:
             )
         """)
         
+        # Achievements table (tracks earned achievements)
+        await self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS user_achievements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                achievement_code TEXT,
+                earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (user_id),
+                UNIQUE(user_id, achievement_code)
+            )
+        """)
+        
         await self.connection.commit()
         
         # Add timezone column if it doesn't exist (migration for existing databases)
@@ -378,3 +390,83 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error expiring reminders for user {user_id}: {e}")
             return 0, []
+    
+    # Achievement operations
+    async def grant_achievement(self, user_id: int, achievement_code: str) -> bool:
+        """Grant an achievement to a user."""
+        try:
+            await self.connection.execute("""
+                INSERT OR IGNORE INTO user_achievements (user_id, achievement_code)
+                VALUES (?, ?)
+            """, (user_id, achievement_code))
+            await self.connection.commit()
+            
+            # Check if this was actually a new achievement
+            cursor = await self.connection.execute("""
+                SELECT changes()
+            """)
+            changes = await cursor.fetchone()
+            
+            if changes[0] > 0:
+                logger.info(f"Granted achievement {achievement_code} to user {user_id}")
+                return True
+            else:
+                logger.debug(f"User {user_id} already has achievement {achievement_code}")
+                return False
+        except Exception as e:
+            logger.error(f"Error granting achievement {achievement_code} to user {user_id}: {e}")
+            return False
+    
+    async def get_user_achievements(self, user_id: int) -> List[Dict[str, Any]]:
+        """Get all achievements earned by a user."""
+        try:
+            async with self.connection.execute("""
+                SELECT achievement_code, earned_at
+                FROM user_achievements
+                WHERE user_id = ?
+                ORDER BY earned_at DESC
+            """, (user_id,)) as cursor:
+                rows = await cursor.fetchall()
+                return [{'code': code, 'earned_at': earned_at} for code, earned_at in rows]
+        except Exception as e:
+            logger.error(f"Error getting achievements for user {user_id}: {e}")
+            return []
+    
+    async def has_achievement(self, user_id: int, achievement_code: str) -> bool:
+        """Check if a user has a specific achievement."""
+        try:
+            async with self.connection.execute("""
+                SELECT 1 FROM user_achievements
+                WHERE user_id = ? AND achievement_code = ?
+            """, (user_id, achievement_code)) as cursor:
+                result = await cursor.fetchone()
+                return result is not None
+        except Exception as e:
+            logger.error(f"Error checking achievement {achievement_code} for user {user_id}: {e}")
+            return False
+    
+    async def get_achievement_count(self, user_id: int) -> int:
+        """Get the total number of achievements earned by a user."""
+        try:
+            async with self.connection.execute("""
+                SELECT COUNT(*) FROM user_achievements
+                WHERE user_id = ?
+            """, (user_id,)) as cursor:
+                result = await cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            logger.error(f"Error counting achievements for user {user_id}: {e}")
+            return 0
+    
+    async def get_total_confirmations(self, user_id: int) -> int:
+        """Get total number of water confirmations for a user."""
+        try:
+            async with self.connection.execute("""
+                SELECT COUNT(*) FROM hydration_events
+                WHERE user_id = ? AND event_type = 'confirmed'
+            """, (user_id,)) as cursor:
+                result = await cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            logger.error(f"Error counting confirmations for user {user_id}: {e}")
+            return 0

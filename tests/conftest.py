@@ -19,6 +19,7 @@ from src.database.models import DatabaseManager
 from src.content.manager import ContentManager
 from src.bot.hippo_bot import HippoBot
 from src.bot.reminder_system import ReminderSystem
+from src.bot.achievements import AchievementChecker
 
 
 @pytest.fixture
@@ -66,6 +67,7 @@ async def hippo_bot(temp_db, content_manager):
             bot = HippoBot("fake_token")
             bot.database = temp_db
             bot.content_manager = content_manager
+            bot.achievement_checker = AchievementChecker(temp_db)
             return bot
 
 
