@@ -22,6 +22,7 @@ from telegram.ext import (
 
 from src.database.models import DatabaseManager
 from src.content.manager import ContentManager
+from src.content.charts import ChartGenerator
 from src.bot.reminder_system import ReminderSystem
 from src.bot.achievements import AchievementChecker, ACHIEVEMENTS
 
@@ -37,6 +38,7 @@ class HippoBot:
         self.application: Optional[Application] = None
         self.database: Optional[DatabaseManager] = None
         self.content_manager: Optional[ContentManager] = None
+        self.chart_generator: Optional[ChartGenerator] = None
         self.job_queue: Optional[JobQueue] = None
         self.reminder_system: Optional[ReminderSystem] = None
         self.achievement_checker: Optional[AchievementChecker] = None
@@ -70,6 +72,9 @@ class HippoBot:
         # Initialize content manager
         self.content_manager = ContentManager()  # pragma: no cover
         
+        # Initialize chart generator
+        self.chart_generator = ChartGenerator()  # pragma: no cover
+        
         # Initialize reminder system
         self.reminder_system = ReminderSystem(self.database, self.content_manager)  # pragma: no cover
         
@@ -102,6 +107,7 @@ class HippoBot:
                 BotCommand("setup", "Configure reminder preferences"),
                 BotCommand("stats", "View your hydration statistics"),
                 BotCommand("achievements", "View your achievements"),
+                BotCommand("charts", "View hydration charts and progress visualizations"),
                 BotCommand("poem", "Get a random water reminder poem"),
                 BotCommand("quote", "Get a random inspirational quote"),
                 BotCommand("reset", "Delete all your data and start fresh"),
@@ -129,6 +135,7 @@ class HippoBot:
         self.application.add_handler(CommandHandler("setup", self.setup_command))
         self.application.add_handler(CommandHandler("stats", self.stats_command))
         self.application.add_handler(CommandHandler("achievements", self.achievements_command))
+        self.application.add_handler(CommandHandler("charts", self.charts_command))
         self.application.add_handler(CommandHandler("poem", self.poem_command))
         self.application.add_handler(CommandHandler("quote", self.quote_command))
         self.application.add_handler(CommandHandler("reset", self.reset_command))
@@ -283,7 +290,13 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
         
         stats_text += f"\n\n🏆 Achievements: {achievement_count}/{total_achievements}"
         
-        await update.message.reply_text(stats_text, parse_mode='Markdown')
+        # Add inline button for charts
+        keyboard = [
+            [InlineKeyboardButton("📊 View Charts", callback_data="stats_charts")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(stats_text, parse_mode='Markdown', reply_markup=reply_markup)
     
     async def achievements_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /achievements command."""
@@ -345,6 +358,57 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
             achievements_text += "💧 Start your journey! Each sip brings new achievements!"
         
         await update.message.reply_text(achievements_text, parse_mode='Markdown')
+    
+    async def charts_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /charts command with chart selection options."""
+        user_id = update.effective_user.id
+        
+        # Check if user exists
+        user = await self.database.get_user(user_id)
+        if not user:
+            await update.message.reply_text(
+                "Please start the bot first with /start to set up your account!"
+            )
+            return
+        
+        # Check if chart generator is initialized
+        if not self.chart_generator:
+            logger.error("Chart generator not initialized")
+            await update.message.reply_text(
+                "❌ Chart system is still starting up. Please try again in a moment!"
+            )
+            return
+        
+        # Create inline keyboard for chart selection
+        keyboard = [
+            [
+                InlineKeyboardButton("📊 Daily Timeline", callback_data="chart_daily"),
+                InlineKeyboardButton("📈 Weekly Trend", callback_data="chart_weekly")
+            ],
+            [
+                InlineKeyboardButton("📅 Monthly Calendar", callback_data="chart_monthly"),
+                InlineKeyboardButton("🥧 Success Rate", callback_data="chart_pie")
+            ],
+            [
+                InlineKeyboardButton("📶 Progress Bar", callback_data="chart_progress"),
+                InlineKeyboardButton("📋 Dashboard", callback_data="chart_dashboard")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            "📊 **Hydration Charts & Visualizations**\n\n"
+            "Choose the type of chart you'd like to view:\n\n"
+            "📊 **Daily Timeline** - 24-hour view of today's hydration\n"
+            "📈 **Weekly Trend** - 7-day hydration level progress\n"
+            "📅 **Monthly Calendar** - Color-coded monthly overview\n"
+            "🥧 **Success Rate** - Pie chart of confirmations vs misses\n"
+            "📶 **Progress Bar** - Current hydration level indicator\n"
+            "📋 **Dashboard** - Combined stats overview\n\n"
+            "Select a chart to generate:",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
     
     async def poem_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /poem command."""
@@ -514,6 +578,10 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
             await self._handle_end_time_selection(query)
         elif query.data == "stats":
             await self._handle_stats_callback(query)
+        elif query.data == "stats_charts":
+            await self._handle_stats_charts_callback(query)
+        elif query.data.startswith("chart_"):
+            await self._handle_chart_callback(query)
         else:
             await query.edit_message_text("Unknown button action")
     
@@ -1378,6 +1446,148 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
         stats_text += f"Current hydration level:\n{level_descriptions[hydration_level]}"
         
         await query.edit_message_text(stats_text, parse_mode='Markdown')
+    
+    async def _handle_chart_callback(self, query):
+        """Handle chart generation callbacks."""
+        user_id = query.from_user.id
+        chart_type = query.data.replace("chart_", "")
+        
+        try:
+            # Show loading message
+            await query.edit_message_text("🔄 Generating chart... Please wait a moment!")
+            
+            # Get current hydration level and user data
+            current_level = await self.database.calculate_hydration_level(user_id)
+            user = await self.database.get_user(user_id)
+            
+            chart_buf = None
+            
+            if chart_type == "daily":
+                # Daily timeline chart
+                today = datetime.now()
+                events = await self.database.get_hydration_events_for_date(user_id, today)
+                chart_buf = await self.chart_generator.generate_daily_timeline(
+                    user_id, events, current_level, today
+                )
+                caption = f"📊 **Daily Hydration Timeline**\n\n"
+                caption += f"Today's hydration events at a glance.\n"
+                caption += f"Current Level: {current_level}/5 💧"
+                
+            elif chart_type == "weekly":
+                # Weekly trend chart
+                weekly_data = await self.database.get_daily_hydration_summary(user_id, 7)
+                # Add average level calculation for each day
+                for day in weekly_data:
+                    # Simple approximation - could be improved
+                    day['avg_level'] = min(5, max(0, day['success_rate'] * 5))
+                chart_buf = await self.chart_generator.generate_weekly_trend(user_id, weekly_data)
+                caption = f"📈 **Weekly Hydration Trend**\n\n"
+                caption += f"Your hydration progress over the last 7 days.\n"
+                caption += f"Current Level: {current_level}/5 💧"
+                
+            elif chart_type == "monthly":
+                # Monthly calendar chart
+                now = datetime.now()
+                monthly_data = await self.database.get_monthly_hydration_summary(user_id, now.year, now.month)
+                # Add average level calculation for each day
+                for day in monthly_data:
+                    day['avg_level'] = min(5, max(0, day['success_rate'] * 5))
+                chart_buf = await self.chart_generator.generate_monthly_calendar(
+                    user_id, monthly_data, now.year, now.month
+                )
+                caption = f"📅 **Monthly Hydration Calendar**\n\n"
+                caption += f"Color-coded overview of {now.strftime('%B %Y')}.\n"
+                caption += f"Current Level: {current_level}/5 💧"
+                
+            elif chart_type == "pie":
+                # Success rate pie chart
+                stats = await self.database.get_user_hydration_stats(user_id, 30)  # Last 30 days
+                chart_buf = await self.chart_generator.generate_success_rate_pie(user_id, stats)
+                total = stats['confirmed'] + stats['missed']
+                success_rate = (stats['confirmed'] / total * 100) if total > 0 else 0
+                caption = f"🥧 **Success Rate Chart**\n\n"
+                caption += f"Your hydration success rate (last 30 days).\n"
+                caption += f"Success Rate: {success_rate:.1f}% ({stats['confirmed']}/{total})"
+                
+            elif chart_type == "progress":
+                # Progress bar chart
+                chart_buf = await self.chart_generator.generate_progress_bar(user_id, current_level)
+                caption = f"📶 **Hydration Progress Bar**\n\n"
+                caption += f"Your current hydration level visualization.\n"
+                caption += f"Level {current_level} of 5 ({current_level/5*100:.0f}%)"
+                
+            elif chart_type == "dashboard":
+                # Stats dashboard
+                stats = await self.database.get_user_hydration_stats(user_id, 7)
+                achievement_count = await self.database.get_achievement_count(user_id)
+                recent_levels = await self.database.get_recent_hydration_levels(user_id, 7)
+                
+                stats_data = {
+                    'confirmed': stats['confirmed'],
+                    'missed': stats['missed'],
+                    'current_level': current_level,
+                    'achievement_count': achievement_count,
+                    'recent_levels': recent_levels
+                }
+                chart_buf = await self.chart_generator.generate_stats_dashboard(user_id, stats_data)
+                caption = f"📋 **Hydration Dashboard**\n\n"
+                caption += f"Complete overview of your hydration metrics.\n"
+                caption += f"Current Level: {current_level}/5 💧"
+                
+            else:
+                await query.edit_message_text("❌ Unknown chart type requested.")
+                return
+            
+            if chart_buf:
+                # Send the chart image
+                await query.delete_message()  # Delete the loading message
+                await query.message.reply_photo(
+                    photo=chart_buf,
+                    caption=caption,
+                    parse_mode='Markdown'
+                )
+            else:
+                await query.edit_message_text("❌ Failed to generate chart. Please try again later.")
+                
+        except Exception as e:
+            logger.error(f"Error generating chart {chart_type} for user {user_id}: {e}")
+            await query.edit_message_text(
+                f"❌ Error generating chart: {str(e)}\n\n"
+                "This might be due to insufficient data. Try using the bot for a few days first!"
+            )
+    
+    async def _handle_stats_charts_callback(self, query):
+        """Handle stats charts callback to show chart selection options."""
+        # Create inline keyboard for chart selection
+        keyboard = [
+            [
+                InlineKeyboardButton("📊 Daily Timeline", callback_data="chart_daily"),
+                InlineKeyboardButton("📈 Weekly Trend", callback_data="chart_weekly")
+            ],
+            [
+                InlineKeyboardButton("📅 Monthly Calendar", callback_data="chart_monthly"),
+                InlineKeyboardButton("🥧 Success Rate", callback_data="chart_pie")
+            ],
+            [
+                InlineKeyboardButton("📶 Progress Bar", callback_data="chart_progress"),
+                InlineKeyboardButton("📋 Dashboard", callback_data="chart_dashboard")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "📊 **Hydration Charts & Visualizations**\n\n"
+            "Choose the type of chart you'd like to view:\n\n"
+            "📊 **Daily Timeline** - 24-hour view of today's hydration\n"
+            "📈 **Weekly Trend** - 7-day hydration level progress\n"
+            "📅 **Monthly Calendar** - Color-coded monthly overview\n"
+            "🥧 **Success Rate** - Pie chart of confirmations vs misses\n"
+            "📶 **Progress Bar** - Current hydration level indicator\n"
+            "📋 **Dashboard** - Combined stats overview\n\n"
+            "Select a chart to generate:",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
 
     async def _calculate_next_reminder_text(self, user_id: int) -> str:
         """Calculate when the next reminder will be sent."""
