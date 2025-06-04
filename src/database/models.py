@@ -47,6 +47,7 @@ class DatabaseManager:
                 waking_end_minute INTEGER DEFAULT 0,
                 reminder_interval_minutes INTEGER DEFAULT 60,
                 theme TEXT DEFAULT 'bluey',
+                hippo_name TEXT DEFAULT 'Hippo',
                 timezone TEXT DEFAULT 'Asia/Singapore',
                 is_active BOOLEAN DEFAULT 1
             )
@@ -99,6 +100,17 @@ class DatabaseManager:
             """)
             await self.connection.commit()
             logger.info("Added timezone column to users table")
+        except Exception:
+            # Column already exists, ignore the error
+            pass
+        
+        # Add hippo_name column if it doesn't exist (migration for existing databases)
+        try:
+            await self.connection.execute("""
+                ALTER TABLE users ADD COLUMN hippo_name TEXT DEFAULT 'Hippo'
+            """)
+            await self.connection.commit()
+            logger.info("Added hippo_name column to users table")
         except Exception:
             # Column already exists, ignore the error
             pass
@@ -189,6 +201,19 @@ class DatabaseManager:
             return True
         except Exception as e:
             logger.error(f"Error updating theme for user {user_id}: {e}")
+            return False
+    
+    async def update_user_hippo_name(self, user_id: int, hippo_name: str) -> bool:
+        """Update user's hippo name."""
+        try:
+            await self.connection.execute("""
+                UPDATE users SET hippo_name = ? WHERE user_id = ?
+            """, (hippo_name, user_id))
+            await self.connection.commit()
+            logger.info(f"Updated hippo name for user {user_id} to {hippo_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Error updating hippo name for user {user_id}: {e}")
             return False
     
     async def delete_user_completely(self, user_id: int) -> bool:

@@ -204,15 +204,18 @@ class ReminderSystem:
             ]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
+            # Get hippo name
+            hippo_name = user_data.get('hippo_name', 'Hippo')
+            
             # Prepare message text with inspirational quote and stats
-            message_text = f"🦛 **Time for a Hydration Break!**\n\n"
+            message_text = f"🦛 **{hippo_name} says it's time for a Hydration Break!**\n\n"
             message_text += f"{content['quote']}\n\n"
-            message_text += f"📊 **Your Status:**\n"
+            message_text += f"📊 **{hippo_name}'s Status Report:**\n"
             message_text += f"• Current level: {level_descriptions[hydration_level]}\n"
             message_text += f"• Today: {stats['confirmed']}✅ {stats['missed']}❌"
             if total_today > 0:
                 message_text += f" ({success_rate:.0f}%)"
-            message_text += f"\n\n💧 Tap the button below when you've had some water! 🦛"
+            message_text += f"\n\n💧 Tap the button below when you've had some water! {hippo_name} is counting on you! 🦛"
             
             # Send the message with image
             image_path = Path("assets") / content['image']

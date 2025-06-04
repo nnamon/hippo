@@ -100,6 +100,30 @@ class TestDatabaseManager:
         assert user['theme'] == "desert"
     
     @pytest.mark.asyncio
+    async def test_update_user_hippo_name(self, temp_db, sample_user_data):
+        """Test updating user hippo name."""
+        user_id = sample_user_data['user_id']
+        await temp_db.create_user(user_id, "testuser", "Test", "User")
+        
+        # Test default hippo name
+        user = await temp_db.get_user(user_id)
+        assert user['hippo_name'] == "Hippo"  # Default value
+        
+        # Test updating hippo name
+        success = await temp_db.update_user_hippo_name(user_id, "Splashy")
+        assert success is True
+        
+        user = await temp_db.get_user(user_id)
+        assert user['hippo_name'] == "Splashy"
+        
+        # Test updating to another name
+        success = await temp_db.update_user_hippo_name(user_id, "Bubbles")
+        assert success is True
+        
+        user = await temp_db.get_user(user_id)
+        assert user['hippo_name'] == "Bubbles"
+    
+    @pytest.mark.asyncio
     async def test_record_hydration_event(self, temp_db, sample_user_data):
         """Test recording hydration events."""
         user_id = sample_user_data['user_id']
