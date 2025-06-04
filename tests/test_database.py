@@ -25,6 +25,7 @@ class TestDatabaseManager:
         assert 'users' in table_names
         assert 'hydration_events' in table_names
         assert 'active_reminders' in table_names
+        assert 'user_achievements' in table_names
     
     @pytest.mark.asyncio
     async def test_create_user(self, temp_db):
@@ -305,3 +306,100 @@ class TestDatabaseManager:
         user = await temp_db.get_user(user_id)
         assert user is not None
         assert user['user_id'] == user_id
+    
+    @pytest.mark.asyncio
+    async def test_grant_achievement(self, temp_db):
+        """Test granting achievements to users."""
+        user_id = 12345
+        
+        # Create user first
+        await temp_db.create_user(user_id, "testuser")
+        
+        # Grant new achievement
+        success = await temp_db.grant_achievement(user_id, "first_sip")
+        assert success is True
+        
+        # Try granting same achievement again (should return False)
+        success = await temp_db.grant_achievement(user_id, "first_sip")
+        assert success is False
+    
+    @pytest.mark.asyncio
+    async def test_get_user_achievements(self, temp_db):
+        """Test getting user achievements."""
+        user_id = 12345
+        
+        # Create user and grant achievements
+        await temp_db.create_user(user_id, "testuser")
+        await temp_db.grant_achievement(user_id, "first_sip")
+        await temp_db.grant_achievement(user_id, "hydration_habit")
+        
+        # Get achievements
+        achievements = await temp_db.get_user_achievements(user_id)
+        assert len(achievements) == 2
+        assert any(ach['code'] == 'first_sip' for ach in achievements)
+        assert any(ach['code'] == 'hydration_habit' for ach in achievements)
+        
+        # Each achievement should have code and earned_at
+        for ach in achievements:
+            assert 'code' in ach
+            assert 'earned_at' in ach
+    
+    @pytest.mark.asyncio
+    async def test_has_achievement(self, temp_db):
+        """Test checking if user has specific achievement."""
+        user_id = 12345
+        
+        # Create user and grant achievement
+        await temp_db.create_user(user_id, "testuser")
+        await temp_db.grant_achievement(user_id, "first_sip")
+        
+        # Check has achievement
+        has_it = await temp_db.has_achievement(user_id, "first_sip")
+        assert has_it is True
+        
+        # Check doesn't have achievement
+        has_it = await temp_db.has_achievement(user_id, "hydration_hero")
+        assert has_it is False
+    
+    @pytest.mark.asyncio
+    async def test_get_achievement_count(self, temp_db):
+        """Test counting user achievements."""
+        user_id = 12345
+        
+        # Create user
+        await temp_db.create_user(user_id, "testuser")
+        
+        # Initially should have 0 achievements
+        count = await temp_db.get_achievement_count(user_id)
+        assert count == 0
+        
+        # Grant some achievements
+        await temp_db.grant_achievement(user_id, "first_sip")
+        await temp_db.grant_achievement(user_id, "hydration_habit")
+        await temp_db.grant_achievement(user_id, "week_warrior")
+        
+        # Should now have 3 achievements
+        count = await temp_db.get_achievement_count(user_id)
+        assert count == 3
+    
+    @pytest.mark.asyncio
+    async def test_get_total_confirmations(self, temp_db):
+        """Test getting total water confirmations."""
+        user_id = 12345
+        
+        # Create user
+        await temp_db.create_user(user_id, "testuser")
+        
+        # Initially should have 0 confirmations
+        count = await temp_db.get_total_confirmations(user_id)
+        assert count == 0
+        
+        # Add some confirmed events
+        await temp_db.record_hydration_event(user_id, "confirmed", "reminder_1")
+        await temp_db.record_hydration_event(user_id, "confirmed", "reminder_2")
+        await temp_db.record_hydration_event(user_id, "missed", "reminder_3")
+        await temp_db.record_hydration_event(user_id, "confirmed", "reminder_4")
+        
+        # Should have 3 confirmations (not counting missed)
+        count = await temp_db.get_total_confirmations(user_id)
+        assert count == 3

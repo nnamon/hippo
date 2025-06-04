@@ -23,6 +23,7 @@ from telegram.ext import (
 from src.database.models import DatabaseManager
 from src.content.manager import ContentManager
 from src.bot.reminder_system import ReminderSystem
+from src.bot.achievements import AchievementChecker, ACHIEVEMENTS
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class HippoBot:
         self.content_manager: Optional[ContentManager] = None
         self.job_queue: Optional[JobQueue] = None
         self.reminder_system: Optional[ReminderSystem] = None
+        self.achievement_checker: Optional[AchievementChecker] = None
         
     def start(self):  # pragma: no cover
         """Start the bot."""
@@ -71,6 +73,9 @@ class HippoBot:
         # Initialize reminder system
         self.reminder_system = ReminderSystem(self.database, self.content_manager)  # pragma: no cover
         
+        # Initialize achievement checker
+        self.achievement_checker = AchievementChecker(self.database)  # pragma: no cover
+        
         # Start reminders for existing users (schedule for after startup)
         self.job_queue.run_once(  # pragma: no cover
             self._start_user_reminders_delayed,
@@ -96,6 +101,7 @@ class HippoBot:
                 BotCommand("start", "Start the bot and check setup"),
                 BotCommand("setup", "Configure reminder preferences"),
                 BotCommand("stats", "View your hydration statistics"),
+                BotCommand("achievements", "View your achievements"),
                 BotCommand("poem", "Get a random water reminder poem"),
                 BotCommand("quote", "Get a random inspirational quote"),
                 BotCommand("reset", "Delete all your data and start fresh"),
@@ -122,6 +128,7 @@ class HippoBot:
         self.application.add_handler(CommandHandler("help", self.help_command))
         self.application.add_handler(CommandHandler("setup", self.setup_command))
         self.application.add_handler(CommandHandler("stats", self.stats_command))
+        self.application.add_handler(CommandHandler("achievements", self.achievements_command))
         self.application.add_handler(CommandHandler("poem", self.poem_command))
         self.application.add_handler(CommandHandler("quote", self.quote_command))
         self.application.add_handler(CommandHandler("reset", self.reset_command))
@@ -197,6 +204,7 @@ class HippoBot:
 /start - Welcome message and setup check
 /setup - Configure your reminder preferences
 /stats - View your hydration statistics
+/achievements - View your achievements and progress
 /poem - Get a random water reminder poem
 /quote - Get a random inspirational quote
 /reset - Delete all your data and start fresh
@@ -269,7 +277,74 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
         stats_text += f"Current hydration level:\n{level_descriptions[hydration_level]}\n\n"
         stats_text += f"⏰ {next_reminder_text}"
         
+        # Add achievement count to stats
+        achievement_count = await self.database.get_achievement_count(user_id)
+        total_achievements = len([a for a in ACHIEVEMENTS.values() if not a.hidden])
+        
+        stats_text += f"\n\n🏆 Achievements: {achievement_count}/{total_achievements}"
+        
         await update.message.reply_text(stats_text, parse_mode='Markdown')
+    
+    async def achievements_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /achievements command."""
+        user_id = update.effective_user.id
+        
+        # Get user's earned achievements
+        earned_achievements = await self.database.get_user_achievements(user_id)
+        earned_codes = {ach['code'] for ach in earned_achievements}
+        
+        # Get all achievements grouped by category
+        all_achievements = self.achievement_checker.get_all_achievements()
+        
+        # Build achievements display
+        achievements_text = "🏆 **Your Achievements**\n\n"
+        
+        category_names = {
+            'easy': '💧 Easy',
+            'consistency': '🔥 Consistency',
+            'performance': '⭐ Performance',
+            'special': '✨ Special',
+            'milestone': '🎯 Milestones'
+        }
+        
+        total_earned = 0
+        total_available = 0
+        
+        for category, achievements in all_achievements.items():
+            if not achievements:
+                continue
+                
+            achievements_text += f"**{category_names[category]}**\n"
+            
+            for achievement in achievements:
+                total_available += 1
+                if achievement.code in earned_codes:
+                    total_earned += 1
+                    achievements_text += f"✅ {achievement.icon} **{achievement.name}**\n"
+                    achievements_text += f"   _{achievement.description}_\n"
+                else:
+                    achievements_text += f"🔒 {achievement.icon} {achievement.name}\n"
+                    achievements_text += f"   _{achievement.description}_\n"
+            
+            achievements_text += "\n"
+        
+        # Add summary
+        percentage = (total_earned / total_available * 100) if total_available > 0 else 0
+        achievements_text += f"**Progress: {total_earned}/{total_available} ({percentage:.0f}%)**\n\n"
+        
+        # Add encouragement based on progress
+        if percentage == 100:
+            achievements_text += "🎉 Incredible! You've unlocked all achievements!"
+        elif percentage >= 75:
+            achievements_text += "🌟 Amazing progress! You're almost there!"
+        elif percentage >= 50:
+            achievements_text += "💪 Great job! You're halfway to completing all achievements!"
+        elif percentage >= 25:
+            achievements_text += "🌱 Good start! Keep drinking water to unlock more!"
+        else:
+            achievements_text += "💧 Start your journey! Each sip brings new achievements!"
+        
+        await update.message.reply_text(achievements_text, parse_mode='Markdown')
     
     async def poem_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /poem command."""
@@ -465,11 +540,22 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
             except Exception as immediate_error:
                 logger.warning(f"Could not provide immediate feedback: {immediate_error}")
             
+            # Get reminder creation time if available (for quick response achievement)
+            reminder_time = None
+            
             # Record the confirmation
             await self.database.record_hydration_event(user_id, 'confirmed', reminder_id)
             
             # Remove from active reminders
             await self.database.remove_active_reminder(reminder_id)
+            
+            # Check for new achievements
+            new_achievements = await self.achievement_checker.check_confirmation_achievements(user_id, reminder_time)
+            
+            # Check hydration level achievements
+            hydration_level = await self.database.calculate_hydration_level(user_id)
+            level_achievements = await self.achievement_checker.check_level_achievements(user_id, hydration_level)
+            new_achievements.extend(level_achievements)
             
             # Get updated hydration level and stats
             hydration_level = await self.database.calculate_hydration_level(user_id)
@@ -516,6 +602,15 @@ I'll send you friendly reminders to drink water with cute cartoons, poems, and i
                 response_text += "💪 Great progress! You're building excellent habits!\n\n"
             else:
                 response_text += "🌱 Every sip counts! You're on the right track!\n\n"
+            
+            # Add achievement notifications if any
+            if new_achievements:
+                response_text += "🏆 **New Achievements Unlocked!**\n"
+                for achievement_code in new_achievements:
+                    achievement = ACHIEVEMENTS.get(achievement_code)
+                    if achievement:
+                        response_text += f"{achievement.icon} **{achievement.name}** - {achievement.description}\n"
+                response_text += "\n"
             
             # Add a celebratory poem as a reward
             response_text += f"🎉 **Here's a celebration poem just for you:**\n\n{celebration_poem}"

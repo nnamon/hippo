@@ -101,6 +101,7 @@ class TestBotCommands:
         args, kwargs = mock_update.message.reply_text.call_args
         assert "Hydration Stats" in args[0]
         assert "success rate" in args[0].lower()
+        assert "Achievements:" in args[0]  # Check achievement count is shown
     
     @pytest.mark.asyncio
     async def test_setup_command(self, hippo_bot, mock_update, mock_context):
@@ -166,6 +167,54 @@ class TestBotCommands:
         assert "Here's an inspirational quote for you:" in caption
         assert "Current Hydration:" in caption
         assert "Stay inspired and stay hydrated!" in caption
+    
+    @pytest.mark.asyncio
+    async def test_achievements_command(self, hippo_bot, mock_update, mock_context):
+        """Test /achievements command."""
+        user_id = mock_update.effective_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        # Grant some achievements
+        await hippo_bot.database.grant_achievement(user_id, "first_sip")
+        await hippo_bot.database.grant_achievement(user_id, "hydration_habit")
+        
+        # Mock reply_text method
+        mock_update.message.reply_text = AsyncMock()
+        
+        await hippo_bot.achievements_command(mock_update, mock_context)
+        
+        # Verify achievements were displayed
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        
+        # Check that response contains achievements
+        response = args[0]
+        assert "Your Achievements" in response
+        assert "First Sip" in response
+        assert "Hydration Habit" in response
+        assert "Progress:" in response
+        assert "Easy" in response  # Category name
+    
+    @pytest.mark.asyncio
+    async def test_achievements_command_no_achievements(self, hippo_bot, mock_update, mock_context):
+        """Test /achievements command with no achievements."""
+        user_id = mock_update.effective_user.id
+        await hippo_bot.database.create_user(user_id, "testuser", "Test", "User")
+        
+        # Mock reply_text method
+        mock_update.message.reply_text = AsyncMock()
+        
+        await hippo_bot.achievements_command(mock_update, mock_context)
+        
+        # Verify response for user with no achievements
+        mock_update.message.reply_text.assert_called_once()
+        args, kwargs = mock_update.message.reply_text.call_args
+        
+        # Check encouraging message for new users
+        response = args[0]
+        assert "Your Achievements" in response
+        assert "Progress: 0/" in response
+        assert "Start your journey" in response
 
 
 class TestCallbackHandlers:
